@@ -42,6 +42,11 @@ const PAYMENT_LINKS = {
   elite: "",
 };
 
+// Owner accounts — these emails always have permanent full access to every
+// room (top Elite rank) the moment they sign in, no payment or membership
+// needed. Compared case-insensitively.
+const OWNER_EMAILS = ["prophetdian@gmail.com"];
+
 const SUPABASE_URL = "https://ejhhjzamdittnbfvxsfx.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_a8_nkU_F0ZmfX-4TjKl96g_qHJPUgmJ";
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
@@ -145,6 +150,23 @@ function formatTime(iso) {
   }
 }
 
+// A stable per-browser guest identity so ANY visitor can chat in the free
+// Main Room without an account. Signed-in users always use their real handle.
+function guestId() {
+  let g = null;
+  try { g = localStorage.getItem("rekkies_guest_id"); } catch (e) {}
+  if (!g) {
+    g = "guest-" + Math.random().toString(36).slice(2, 6);
+    try { localStorage.setItem("rekkies_guest_id", g); } catch (e) {}
+  }
+  return g;
+}
+// The author for a message — real email when signed in, else a guest handle
+// (rendered as the part before the @, e.g. "guest-4f2a").
+function currentAuthorEmail() {
+  return state.session ? state.session.user.email : guestId() + "@guest";
+}
+
 // ---- state ----
 let state = {
   session: null,
@@ -171,21 +193,24 @@ function membershipFromUser(user) {
 async function refreshSession() {
   const { data } = await supabase.auth.getSession();
   state.session = data.session;
-  if (state.session) {
-    state.membership = membershipFromUser(state.session.user);
-  } else {
-    state.membership = null;
+  state.membership = state.session ? membershipFromUser(state.session.user) : null;
+  state.loading = false;
+
+  // If the room they're in is no longer usable — e.g. they just signed out of
+  // a paid room — drop them out of it so the Main Room fallback below kicks in.
+  const active = channelById(state.activeChannelId);
+  if (active && !isChannelUnlocked(active)) {
+    unsubscribeRealtime();
     state.activeChannelId = null;
     state.messages = [];
-    unsubscribeRealtime();
   }
-  state.loading = false;
+
   render();
 
-  // Land straight in the free Main Room on login or on reopening the app
-  // with a still-valid session — but only once per session, not on every
-  // refresh (so it doesn't yank the user away from a channel they picked).
-  if (state.session && !state.activeChannelId) {
+  // EVERYONE — signed in or not — opens straight into the free Main Room.
+  // Only when nothing is active, so we don't yank someone out of a room they
+  // deliberately opened on a later refresh/token event.
+  if (!state.activeChannelId) {
     await selectChannel("main");
   }
 }
@@ -262,11 +287,22 @@ async function leaveTier() {
   if (state.session && (!active || !isChannelUnlocked(active))) await selectChannel("main");
 }
 
+// Is the signed-in user an owner account with permanent full access?
+function isOwner() {
+  const email = state.session && state.session.user && state.session.user.email;
+  return !!email && OWNER_EMAILS.includes(String(email).toLowerCase());
+}
+
 function currentRank() {
+  if (isOwner()) return 5; // owner — every room, always
   return state.membership ? state.membership.rank : 0;
 }
 
 function isChannelUnlocked(channel) {
+  if (!channel) return false;
+  // The free Main Room (requiredRank 0) is open to EVERYONE — signed in or not.
+  if (channel.requiredRank === 0) return true;
+  // Paid rooms still require an account and the matching rank.
   return !!state.session && currentRank() >= channel.requiredRank;
 }
 
@@ -285,7 +321,7 @@ function unsubscribeRealtime() {
 
 async function selectChannel(channelId) {
   const channel = channelById(channelId);
-  if (!channel || !state.session || !isChannelUnlocked(channel)) return;
+  if (!channel || !isChannelUnlocked(channel)) return;
 
   unsubscribeRealtime();
   state.activeChannelId = channelId;
@@ -325,10 +361,10 @@ async function selectChannel(channelId) {
 async function sendMessage(content) {
   const text = content.trim();
   const channel = channelById(state.activeChannelId);
-  if (!channel || !state.session || !isChannelUnlocked(channel) || !text) return;
+  if (!channel || !isChannelUnlocked(channel) || !text) return;
 
   const msg = {
-    author_email: state.session.user.email,
+    author_email: currentAuthorEmail(),
     content: text,
     created_at: new Date().toISOString(),
   };
@@ -341,16 +377,20 @@ async function sendMessage(content) {
     state.realtimeChannel.send({ type: "broadcast", event: "msg", payload: msg });
   }
 
-  // Best-effort persistence — silently ignored if the messages table isn't set up.
-  try {
-    await supabase.from("messages").insert({
-      channel_id: channel.id,
-      user_id: state.session.user.id,
-      author_email: msg.author_email,
-      content: msg.content,
-    });
-  } catch (e) {
-    /* no table — message stays live-only */
+  // Best-effort persistence — only for signed-in users (the messages table,
+  // if present, ties each row to a user_id) and silently ignored if the table
+  // isn't set up. Guest messages stay live-only.
+  if (state.session) {
+    try {
+      await supabase.from("messages").insert({
+        channel_id: channel.id,
+        user_id: state.session.user.id,
+        author_email: msg.author_email,
+        content: msg.content,
+      });
+    } catch (e) {
+      /* no table — message stays live-only */
+    }
   }
 }
 
@@ -393,7 +433,7 @@ function renderRanks() {
   const grid = document.getElementById("rankGrid");
   const rank = currentRank();
   grid.innerHTML = TIERS.map((t) => {
-    const isCurrent = state.membership && state.membership.tier_id === t.id;
+    const isCurrent = isOwner() ? t.id === "elite" : state.membership && state.membership.tier_id === t.id;
     const owned = rank >= t.rank;
     const inheritedRooms = TIERS.filter((o) => o.rank < t.rank).flatMap((o) => o.ownRooms);
     const roomsHtml = [
@@ -474,8 +514,12 @@ function renderMessages() {
     return;
   }
 
-  input.disabled = false;
-  sendBtn.disabled = false;
+  const unlocked = isChannelUnlocked(channel);
+  input.disabled = !unlocked;
+  sendBtn.disabled = !unlocked;
+  input.placeholder = unlocked
+    ? "Message the channel…"
+    : "Join this rank to chat here";
 
   box.innerHTML = state.messages.length
     ? state.messages
@@ -497,7 +541,9 @@ function renderRooms() {
   const membership = state.membership ? tierById(state.membership.tier_id) : null;
 
   if (!state.session) {
-    banner.innerHTML = `Sign in above — the Main Room is free the moment you have an account.`;
+    banner.innerHTML = `You're in the free <strong>Main Room</strong> — chat as a guest, or sign in above to unlock the paid rooms.`;
+  } else if (isOwner()) {
+    banner.innerHTML = `👑 Owner access — every room is unlocked for <strong>${escapeHtml(state.session.user.email)}</strong>.`;
   } else if (membership) {
     banner.innerHTML = `You're in as <strong>${membership.role}</strong> (${membership.name}). <button class="btn btn-ghost btn-small" id="leaveBtn">Leave rank (demo)</button>`;
   } else {

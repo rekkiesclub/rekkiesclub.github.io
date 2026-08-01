@@ -39,10 +39,17 @@ palette only — `#000000` `#ffffff` `#00f7ff` `#fa00ff` `#00ff49`.
   in-app; running the optional `messages` table adds server-side enforcement
   on top — see the Supabase section.)
 
-- **Main Room** — free for anyone with an account, no payment required.
-  Logging in (or reopening the app with a still-active session) drops the
-  user straight into it. Users who haven't joined a paid rank see every
-  other channel locked but can chat here immediately.
+- **Main Room** — the free room for **all users**. The app **opens straight
+  into it for everyone**, signed in or not: a first-time visitor can read and
+  chat right away as a guest (a stable per-browser `guest-xxxx` handle), no
+  account needed. Signing in swaps the guest handle for the user's own and
+  unlocks the paid rooms. Every other channel stays visible but locked until
+  the matching rank is held.
+
+- **Owner access** — the account **`prophetdian@gmail.com`** is an owner
+  (`OWNER_EMAILS` in `app.js`) and always has permanent full access to every
+  room the moment it signs in — no payment or membership needed. Add more
+  emails to that list to grant the same.
 
 ## Supabase — works out of the box, no database setup
 
