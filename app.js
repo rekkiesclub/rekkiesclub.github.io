@@ -125,6 +125,17 @@ function escapeHtml(str) {
   div.textContent = str;
   return div.innerHTML;
 }
+// Discord-style: show the handle (before the @), not everyone's full email.
+function authorHandle(email) {
+  return String(email || "").split("@")[0] || "member";
+}
+function formatTime(iso) {
+  try {
+    return new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch (e) {
+    return "";
+  }
+}
 
 // ---- state ----
 let state = {
@@ -164,9 +175,19 @@ async function refreshSession() {
 }
 
 async function signUp(email, password) {
-  const { error } = await supabase.auth.signUp({ email, password });
-  if (error) alert("Couldn't sign up: " + error.message);
-  else alert("Account created. If email confirmation is on, check your inbox — otherwise you're signed in.");
+  const { data, error } = await supabase.auth.signUp({ email, password });
+  if (error) {
+    alert("Couldn't sign up: " + error.message);
+    return;
+  }
+  // If the project has email confirmation ON (the default), signUp returns no
+  // session — the user must click the emailed link first. If confirmation is
+  // OFF, a session comes back and onAuthStateChange logs them straight in.
+  if (data.session) {
+    // logged in immediately — the auth listener will land them in the Main Room
+  } else {
+    alert("Account created! Check your email for a confirmation link, then log in.");
+  }
 }
 
 async function signIn(email, password) {
@@ -414,7 +435,8 @@ function renderMessages() {
         .map(
           (m) => `
         <div class="chat-message">
-          <span class="chat-author">${escapeHtml(m.author_email)}</span>
+          <span class="chat-author">${escapeHtml(authorHandle(m.author_email))}</span>
+          <span class="chat-time">${escapeHtml(formatTime(m.created_at))}</span>
           <span class="chat-text">${escapeHtml(m.content)}</span>
         </div>`
         )

@@ -5,7 +5,9 @@ step, vanilla HTML/CSS/JS) built as a copy of the Rekkies Discord server: same
 ranks, rooms as real chat channels, gated exactly like the Discord roles run
 through [upgrade.chat/rekkies](https://upgrade.chat/rekkies).
 
-Live at: https://rekkiesclub.github.io
+Live at: https://rekkiesclub.github.io — **GitHub Pages is enabled and the
+site is up.** The app is fully deployed; the only step left to make chat and
+membership functional is running `supabase/schema.sql` once (see below).
 
 Theme: [Fredoka](https://fonts.google.com/specimen/Fredoka) font, 5-color
 palette only — `#000000` `#ffffff` `#00f7ff` `#fa00ff` `#00ff49`.
@@ -47,12 +49,17 @@ palette only — `#000000` `#ffffff` `#00f7ff` `#fa00ff` `#00ff49`.
 Project: `ejhhjzamdittnbfvxsfx` (https://ejhhjzamdittnbfvxsfx.supabase.co).
 
 - **Auth** — email + password, stored by Supabase (not in this codebase).
-  Sign up and log in both live in the Club Rooms section's auth bar.
-  - By default Supabase requires a user to click an emailed confirmation
-    link before their password account can sign in. If you want sign-up to
-    log people in immediately with no email step, turn off **Authentication
-    → Providers → Email → Confirm email** in the Supabase dashboard — that's
-    a project setting, not something the publishable key can change.
+  Sign up and log in both live in the Club Rooms section's auth bar. The
+  session is persisted, so returning users stay logged in and land straight
+  in the Main Room.
+  - **Email confirmation is currently ON** for this project (verified via the
+    Auth settings API: `mailer_autoconfirm: false`). That means a new account
+    must click the emailed confirmation link before it can log in — the app
+    detects this and tells the user to check their inbox. If you'd rather
+    sign-up log people in instantly with no email step, turn **off**
+    **Authentication → Providers → Email → Confirm email** in the Supabase
+    dashboard. It's a project setting the publishable key can't change, so it
+    has to be done from the dashboard.
 - **`memberships` table** — one row per user: `user_id`, `tier_id`, `rank`.
   Row-level security means a signed-in user can only read/write their own
   row.

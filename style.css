@@ -293,7 +293,8 @@ section h2 {
 }
 .chat-placeholder { color: var(--text-dim); font-size: 0.9rem; }
 .chat-message { font-size: 0.9rem; }
-.chat-author { color: var(--cyan); font-weight: 600; margin-right: 8px; }
+.chat-author { color: var(--cyan); font-weight: 600; margin-right: 6px; }
+.chat-time { color: var(--text-dim); font-size: 0.72rem; margin-right: 8px; }
 .chat-text { color: var(--text); word-break: break-word; }
 .chat-form {
   display: flex;
