@@ -49,7 +49,12 @@ const OWNER_EMAILS = ["prophetdian@gmail.com"];
 
 const SUPABASE_URL = "https://ejhhjzamdittnbfvxsfx.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_a8_nkU_F0ZmfX-4TjKl96g_qHJPUgmJ";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
+// NOTE: the client is named `sb`, NOT `supabase`. The Supabase UMD script
+// registers a global `supabase` (the library); declaring `const supabase`
+// here collides with it and throws a page-breaking SyntaxError
+// ("Identifier 'supabase' has already been declared"), which aborts this whole
+// file and leaves the app blank. Keep this named `sb`.
+const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 // Rank order matches the live Discord roles (higher rank keeps every
 // channel from the ranks below it).
@@ -167,6 +172,17 @@ function currentAuthorEmail() {
   return state.session ? state.session.user.email : guestId() + "@guest";
 }
 
+// Remember the last email used to log in so it's prefilled next time. The
+// Supabase session itself is persisted by the client (localStorage), so a
+// logged-in user stays logged in across reloads and doesn't re-enter anything;
+// the browser's own password manager saves the password via the login form.
+function rememberedEmail() {
+  try { return localStorage.getItem("rekkies_last_email") || ""; } catch (e) { return ""; }
+}
+function rememberEmail(email) {
+  try { localStorage.setItem("rekkies_last_email", email); } catch (e) {}
+}
+
 // ---- state ----
 let state = {
   session: null,
@@ -191,7 +207,7 @@ function membershipFromUser(user) {
 }
 
 async function refreshSession() {
-  const { data } = await supabase.auth.getSession();
+  const { data } = await sb.auth.getSession();
   state.session = data.session;
   state.membership = state.session ? membershipFromUser(state.session.user) : null;
   state.loading = false;
@@ -216,7 +232,8 @@ async function refreshSession() {
 }
 
 async function signUp(email, password) {
-  const { data, error } = await supabase.auth.signUp({ email, password });
+  rememberEmail(email);
+  const { data, error } = await sb.auth.signUp({ email, password });
   if (error) {
     alert("Couldn't sign up: " + error.message);
     return;
@@ -232,12 +249,13 @@ async function signUp(email, password) {
 }
 
 async function signIn(email, password) {
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  rememberEmail(email);
+  const { error } = await sb.auth.signInWithPassword({ email, password });
   if (error) alert("Couldn't sign in: " + error.message);
 }
 
 async function signOut() {
-  await supabase.auth.signOut();
+  await sb.auth.signOut();
 }
 
 async function joinTier(tier) {
@@ -259,7 +277,7 @@ async function joinTier(tier) {
   );
   if (!ok) return;
 
-  const { data, error } = await supabase.auth.updateUser({
+  const { data, error } = await sb.auth.updateUser({
     data: { tier_id: tier.id, rank: tier.rank },
   });
   if (error) {
@@ -272,7 +290,7 @@ async function joinTier(tier) {
 
 async function leaveTier() {
   if (!state.session) return;
-  const { data, error } = await supabase.auth.updateUser({
+  const { data, error } = await sb.auth.updateUser({
     data: { tier_id: null, rank: 0 },
   });
   if (error) {
@@ -313,7 +331,7 @@ function isChannelUnlocked(channel) {
 // silently ignored.
 function unsubscribeRealtime() {
   if (state.realtimeChannel) {
-    supabase.removeChannel(state.realtimeChannel);
+    sb.removeChannel(state.realtimeChannel);
     state.realtimeChannel = null;
   }
   state.realtimeReady = false;
@@ -346,7 +364,7 @@ async function selectChannel(channelId) {
   renderMessages();
 
   // Live messages via Broadcast — no database required.
-  const rt = supabase.channel(`room:${channelId}`, { config: { broadcast: { self: false } } });
+  const rt = sb.channel(`room:${channelId}`, { config: { broadcast: { self: false } } });
   rt.on("broadcast", { event: "msg" }, ({ payload }) => {
     if (state.activeChannelId === channelId) {
       state.messages.push(payload);
@@ -382,7 +400,7 @@ async function sendMessage(content) {
   // isn't set up. Guest messages stay live-only.
   if (state.session) {
     try {
-      await supabase.from("messages").insert({
+      await sb.from("messages").insert({
         channel_id: channel.id,
         user_id: state.session.user.id,
         author_email: msg.author_email,
@@ -409,12 +427,12 @@ function renderAuthBar() {
   } else {
     bar.innerHTML = `
       <form id="authForm" class="auth-form">
-        <input type="email" id="authEmail" placeholder="you@email.com" required />
-        <input type="password" id="authPassword" placeholder="password" required minlength="6" />
+        <input type="email" id="authEmail" name="email" placeholder="you@email.com" autocomplete="username" required value="${escapeHtml(rememberedEmail())}" />
+        <input type="password" id="authPassword" name="password" placeholder="password" autocomplete="current-password" required minlength="6" />
         <button type="submit" class="btn btn-primary btn-small">Log in</button>
         <button type="button" id="signUpBtn" class="btn btn-outline btn-small">Sign up</button>
       </form>
-      <span class="auth-hint">New here? Enter an email + password, then hit Sign up.</span>`;
+      <span class="auth-hint">Log in with your email + password — your browser can save it, and you'll stay logged in. New here? Enter both, then hit Sign up.</span>`;
     const form = document.getElementById("authForm");
     const emailInput = document.getElementById("authEmail");
     const passwordInput = document.getElementById("authPassword");
@@ -567,7 +585,7 @@ function render() {
 document.addEventListener("DOMContentLoaded", () => {
   render();
   refreshSession();
-  supabase.auth.onAuthStateChange(() => refreshSession());
+  sb.auth.onAuthStateChange(() => refreshSession());
 
   document.getElementById("chatForm").addEventListener("submit", (e) => {
     e.preventDefault();

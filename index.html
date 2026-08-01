@@ -20,39 +20,21 @@
       <span class="brand-name">REKKIES <em>CLUB</em></span>
     </a>
     <nav class="main-nav">
+      <a href="#rooms">Rooms</a>
       <a href="#ranks">Ranks</a>
-      <a href="#rooms">Club Rooms</a>
-      <a href="#rooms" class="nav-cta">Enter Club</a>
     </nav>
   </div>
 </header>
 
 <main id="top">
 
-  <section class="hero">
-    <img src="assets/rekkies-logo.png" alt="REKKIES" class="hero-logo" />
-    <h1>👑 THE REKKIES 👑</h1>
-    <p class="hero-tagline">Musicians, creators, and entrepreneurs building together. Pick your rank, unlock your channels, and chat live — right here.</p>
-    <div class="hero-actions">
-      <a href="#ranks" class="btn btn-primary">See Ranks</a>
-      <a href="#rooms" class="btn btn-outline">Enter the Club</a>
-    </div>
-  </section>
-
-  <section id="ranks" class="ranks">
-    <h2>Club Ranks</h2>
-    <p class="section-sub">Every rank stacks on the one before it — higher ranks keep everything below, plus their own channels.</p>
-    <div id="rankGrid" class="rank-grid"><!-- rendered by app.js --></div>
-  </section>
-
   <section id="rooms" class="rooms">
-    <h2>Club Rooms</h2>
     <div id="authBar" class="auth-bar"></div>
     <div id="membershipBanner" class="membership-banner"></div>
     <div class="discord-shell">
       <aside id="channelList" class="channel-list"><!-- rendered by app.js --></aside>
       <div class="chat-pane">
-        <div id="chatHeader" class="chat-header">Pick a channel to start chatting</div>
+        <div id="chatHeader" class="chat-header">Main Room 🏠</div>
         <div id="chatMessages" class="chat-messages"></div>
         <form id="chatForm" class="chat-form">
           <input id="chatInput" type="text" placeholder="Message the channel…" autocomplete="off" disabled />
@@ -60,6 +42,12 @@
         </form>
       </div>
     </div>
+  </section>
+
+  <section id="ranks" class="ranks">
+    <h2>Club Ranks</h2>
+    <p class="section-sub">Every rank stacks on the one before it — higher ranks keep everything below, plus their own channels.</p>
+    <div id="rankGrid" class="rank-grid"><!-- rendered by app.js --></div>
   </section>
 
 </main>
