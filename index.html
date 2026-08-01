@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>REKKIES CLUB</title>
-<meta name="description" content="REKKIES CLUB — the free live community for the Rekkies. Land in the Main Room and chat live with everyone." />
+<meta name="description" content="REKKIES CLUB — the members platform for The Rekkies. Sign in with your email, land in the live Main Room, and chat in real time with the community." />
 <link rel="icon" type="image/png" href="assets/rekkies-logo.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -19,37 +19,37 @@
       <img src="assets/rekkies-logo.png" alt="Rekkies" class="brand-icon" />
       <span class="brand-name">REKKIES <em>CLUB</em></span>
     </a>
-    <nav class="main-nav">
-      <a href="#rooms">Rooms</a>
+
+    <nav class="header-nav">
+      <!-- Rooms: a clickable menu in the top right -->
+      <div class="menu" id="roomsMenu">
+        <button class="btn btn-ghost btn-small menu-trigger" id="roomsTrigger" aria-haspopup="true" aria-expanded="false">
+          Rooms <span class="caret">▾</span>
+        </button>
+        <div class="menu-panel rooms-panel" id="roomsPanel" hidden><!-- rendered by app.js --></div>
+      </div>
+
+      <!-- Profile / auth: also top right -->
+      <div id="profileBar" class="profile-bar"><!-- rendered by app.js --></div>
     </nav>
   </div>
 </header>
 
 <main id="top">
-
-  <section id="rooms" class="rooms">
-    <div id="authBar" class="auth-bar"></div>
-    <div id="membershipBanner" class="membership-banner"></div>
-    <div class="discord-shell">
-      <aside id="channelList" class="channel-list"><!-- rendered by app.js --></aside>
-      <div class="chat-pane">
-        <div id="chatHeader" class="chat-header">Main Room 🏠</div>
-        <div id="chatMessages" class="chat-messages"></div>
-        <form id="chatForm" class="chat-form">
-          <input id="chatInput" type="text" placeholder="Message the channel…" autocomplete="off" disabled />
-          <button type="submit" class="btn btn-primary btn-small" disabled>Send</button>
-        </form>
+  <section class="club">
+    <div class="chat-pane">
+      <div class="chat-header">
+        <span id="chatTitle" class="chat-title">Main Room 🏠</span>
+        <span id="presence" class="presence"></span>
       </div>
+      <div id="chatMessages" class="chat-messages"></div>
+      <form id="chatForm" class="chat-form">
+        <input id="chatInput" type="text" placeholder="Message the channel…" autocomplete="off" maxlength="2000" disabled />
+        <button type="submit" class="btn btn-primary btn-small" disabled>Send</button>
+      </form>
     </div>
   </section>
-
 </main>
-
-<footer class="site-footer">
-  <img src="assets/rekkies-logo.png" alt="" class="footer-icon" />
-  <p>REKKIES CLUB &middot; <a href="mailto:rekkiesculture@gmail.com">rekkiesculture@gmail.com</a></p>
-  <p class="footer-fine">A free live community. Sign in with your email to chat in every room.</p>
-</footer>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
 <script src="app.js"></script>

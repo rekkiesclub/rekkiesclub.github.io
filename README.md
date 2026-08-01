@@ -1,86 +1,87 @@
 # REKKIES CLUB
 
-The **free live community** for **The Rekkies** — a standalone static site
-(GitHub Pages, no build step, vanilla HTML/CSS/JS). The app opens straight into
-the live **Main Room**; every room is a real live chat channel. There are no
-ranks to buy and no payments — sign in with your email + password and chat.
+The members platform for **The Rekkies** — a standalone static site (GitHub
+Pages, no build step, vanilla HTML / CSS / JS). Sign in with your email and
+password, get a profile, land in the live **Main Room**, and chat in real time
+with the community. Free to join — there's nothing to buy.
 
-Live at: https://rekkiesclub.github.io — **GitHub Pages is enabled and the
-site is up.** Fully functional as deployed: land in the Main Room, chat as a
-guest, or sign up / log in to join every room with your own profile — no
-database setup required (see Supabase section). Persistent chat history is an
-optional upgrade.
+Live at: **https://rekkiesclub.github.io**
 
-Theme: [Fredoka](https://fonts.google.com/specimen/Fredoka) font, 5-color
+Theme: [Fredoka](https://fonts.google.com/specimen/Fredoka) font, five-color
 palette only — `#000000` `#ffffff` `#00f7ff` `#fa00ff` `#00ff49`.
 
 ## What it does
 
-- **Main Room** — the live home **everyone lands in** on open, signed in or
-  not. A first-time visitor can read and chat right away as a guest (a stable
-  per-browser `guest-xxxx` handle), no account needed.
+- **Opens in the live Main Room** — every visitor, signed in or not, lands
+  straight in the Main Room and can chat right away (guests get a stable
+  per-browser handle). No landing page, no funnel — the page *is* the chat.
+- **Rooms menu** — the topic channels (Community, Creative, Tech & Content,
+  Business, Inner Circle) live in a **"Rooms" dropdown at the top right**, not
+  in the main view. Open it, pick a room, and the chat switches. Every room is
+  **free**. The Main Room is open to all; the rest just need a signed-in profile
+  so posts carry a name (locked rooms show 🔒 until you sign in).
+- **Profile section** — a **profile dropdown** in the top right shows your
+  avatar initial, display name, email, and join date. Your account is your
+  email + password (Supabase Auth); pick a **display name** when you join and
+  edit it any time. It shows on your messages and follows your account across
+  devices.
+- **Permanent chat** — messages are **saved**: open a room and its history
+  loads, and everything stays until **you delete it**. Hover your own message
+  and hit **×** to remove it for everyone (you can only delete your own).
+- **Live presence** — each room shows a real-time **"N here"** count of who's
+  currently in it, powered by Supabase Realtime Presence.
 
-- **Rooms** — a sidebar/chat layout: a room sidebar grouped by topic
-  (Community, Creative, Tech & Content, Business, Inner Circle) and a chat pane
-  with live messages over Supabase Realtime. Every room is **free**. The Main
-  Room is open to everyone; the rest just need a signed-in profile so your
-  messages carry your name (rooms you can't yet chat in show greyed out with
-  🔒 until you sign in).
-
-- **Profiles** — your profile is your account: email + password, saved by the
-  app and carried across devices. Signing in swaps the guest handle for your
-  own.
-
-## Supabase — works out of the box, no database setup
+## Supabase
 
 Project: `ejhhjzamdittnbfvxsfx` (https://ejhhjzamdittnbfvxsfx.supabase.co).
 
-The app is **fully functional with only the publishable key** — no tables to
-create, no SQL to run. It uses two Supabase capabilities that need no schema:
+The app uses the **publishable key only** (public by design) and four Supabase
+capabilities:
 
-- **Auth** — email + password, stored by Supabase (not in this codebase).
-  Sign up and log in both live in the Rooms section's auth bar. The session is
-  persisted, so returning users stay logged in and land straight in the Main
-  Room.
-  - **Email confirmation is currently ON** for this project (verified via the
-    Auth settings API: `mailer_autoconfirm: false`). A new account must click
-    the emailed confirmation link before it can log in — the app detects this
-    and tells the user to check their inbox. To let sign-up log people in
-    instantly with no email step, turn **off** **Authentication → Providers →
-    Email → Confirm email** in the Supabase dashboard.
-- **Room chat** — live messages over **Supabase Realtime Broadcast**, one
-  channel per room. No table required; everyone in a room sees messages in
-  real time.
+- **Auth** — email + password, stored by Supabase (not in this codebase). The
+  session is persisted, so returning members stay logged in and land straight
+  in the Main Room. The chosen display name lives on `user_metadata`.
+  - **Email confirmation is ON** by default for this project. A new account
+    must click the emailed link before it can log in — the app detects this and
+    says to check the inbox. To let people in instantly with no email step,
+    turn **off** **Authentication → Providers → Email → Confirm email** in the
+    dashboard.
+- **`messages` table** — permanent chat history. Loaded when a room opens; each
+  member message is saved and kept until its author deletes it. Row-level
+  security: everyone can read, a member can only insert/delete **their own**
+  messages (see `supabase/schema.sql`). Guests can chat live in the Main Room,
+  but guest messages are not saved (RLS only lets signed-in members write).
+- **Realtime Broadcast** — instant live delivery of new messages and deletes to
+  everyone currently viewing a room.
+- **Realtime Presence** — the live "who's here" count.
 
-### Optional upgrade: persistent chat history (`supabase/schema.sql`)
+### Database setup (`supabase/schema.sql`)
 
-Broadcast chat is live-only — messages aren't saved, so a room starts empty on
-reload. If you want **persistent history**, run `supabase/schema.sql` once in
-the dashboard's SQL Editor
-(https://supabase.com/dashboard/project/ejhhjzamdittnbfvxsfx/sql/new). It adds
-a `messages` table. The app then automatically loads history when a room opens
-and saves each message — no code change needed. Until then it just runs
-live-only; nothing breaks. (The publishable key can't run DDL, which is why
-this is a dashboard step and not something the app does itself.)
+The `messages` table has already been created on this project. If you ever need
+to recreate it (or set up a fresh Supabase project), run `supabase/schema.sql`
+once in the dashboard's SQL Editor
+(https://supabase.com/dashboard/project/ejhhjzamdittnbfvxsfx/sql/new). It is
+idempotent — safe to re-run. The publishable key can't run DDL, which is why
+this is a dashboard step.
 
 ### Key handling
 
-Only the **publishable** key lives in `app.js` — by design; it's meant to be
-public. The **secret / service-role** keys must never be added to this repo or
-any file served by GitHub Pages: this is a static site, so anything in its code
-is visible to every visitor, and the service role bypasses all security.
+Only the **publishable** key lives in `app.js` — by design; it's public. The
+**secret / service-role** key and any account access token (`sbp_…`) must never
+be added to this repo or any file served by GitHub Pages: this is a static
+site, so anything in its code is visible to every visitor, and those keys
+bypass all security.
 
 ## Structure
 
-- `index.html` — page structure
-- `style.css` — Fredoka font, black/white/cyan/magenta/green theme
-- `app.js` — room data, Supabase auth (profiles), Realtime Broadcast chat,
-  rendering
-- `supabase/schema.sql` — OPTIONAL; `messages` table for persistent history
-- `assets/rekkies-logo.png` — the official Rekkies crown logo, used as
-  favicon, header icon, and footer icon
+- `index.html` — page structure (header with Rooms + Profile dropdowns, chat)
+- `style.css` — Fredoka font, black / white / cyan / magenta / green theme
+- `app.js` — room data, Supabase auth (profiles + display name), persistent
+  chat (save / load / delete), Realtime Broadcast + Presence, rendering
+- `supabase/schema.sql` — the `messages` table + row-level security policies
+- `assets/rekkies-logo.png` — the Rekkies crown logo (favicon, header)
 
 ## Local preview
 
-No build step — just open `index.html` in a browser, or serve the folder
-with any static file server.
+No build step — open `index.html` in a browser, or serve the folder with any
+static file server.

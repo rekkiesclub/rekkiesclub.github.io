@@ -1,52 +1,51 @@
 /* ============================================================
-   REKKIES CLUB — app.js
-   Vanilla JS, no build step. A standalone, FREE community home for
-   the Rekkies club. The app opens straight into the live Main Room;
-   every room is a real live chat channel. No payments, no ranks to
-   buy — just sign in with your email + password and chat.
+   REKKIES CLUB — app.js  (the REKKIES CLUB platform)
+   Vanilla JS, no build step, served straight to the browser.
 
-   Backed by Supabase — and it works OUT OF THE BOX with no database
-   setup or SQL step:
-   • Profiles ..... Supabase Auth (email + password). Your profile —
-                    your handle in chat — is your account, saved in the
-                    app and carried across devices.
-   • Room chat .... Supabase Realtime Broadcast — live messages between
-                    everyone in a room, with no table required. If the
-                    optional `messages` table from supabase/schema.sql
-                    exists, chat history is also loaded and saved; if
-                    not, chat is simply live-only.
+   A live members community: sign in with your email + password, get a
+   profile (a display name that's yours across devices), land in the live
+   Main Room, and chat in real time in any room. Free — nothing to buy.
 
-   Only the PUBLISHABLE key belongs here — this file is served as-is to
-   every visitor's browser, so anything in it is public. The secret key
-   must never be added to this file or committed to this repo.
+   Layout: rooms live in a "Rooms" dropdown menu at the top right; your
+   profile lives in a profile dropdown next to it. The page itself is just
+   the live chat.
 
-   ---- OPTIONAL CONFIG (the app runs without any of these) ----
-   1. supabase/schema.sql — run it once in the SQL Editor ONLY if you
-      want persistent chat history. Not required for the app to work.
-   2. Email confirmation is ON by default; turn it off in the dashboard
-      (Authentication → Providers → Email → Confirm email) if you want
-      sign-up to log a user in immediately with no email step.
+   Runs on Supabase with only the publishable key:
+   • Profiles ... Supabase Auth (email + password). Your display name lives
+                  on your own Auth record (user_metadata), so it follows
+                  your account and needs no table.
+   • Live chat .. Supabase Realtime Broadcast — messages between everyone in
+                  a room, instantly.
+   • Who's here . Supabase Realtime Presence — a live count of who's in the
+                  room right now.
+   • Saved chat . the `messages` table (supabase/schema.sql) keeps history
+                  permanently: it loads when a room opens and every member
+                  message is stored until its author deletes it. Guests can
+                  chat live in the Main Room but their messages aren't saved.
+
+   Only the PUBLISHABLE key belongs in this file — it's public by design.
+   The secret / service-role key must NEVER be added here or committed.
    ============================================================ */
 
 const SUPABASE_URL = "https://ejhhjzamdittnbfvxsfx.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_a8_nkU_F0ZmfX-4TjKl96g_qHJPUgmJ";
-// NOTE: the client is named `sb`, NOT `supabase`. The Supabase UMD script
-// registers a global `supabase` (the library); declaring `const supabase`
-// here collides with it and throws a page-breaking SyntaxError
-// ("Identifier 'supabase' has already been declared"), which aborts this whole
-// file and leaves the app blank. Keep this named `sb`.
+// The client is named `sb`, NOT `supabase`: the Supabase UMD script already
+// registers a global `supabase` (the library), and re-declaring that name
+// throws a page-breaking SyntaxError that blanks the whole app. Keep it `sb`.
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 // ---- rooms ----
 // The Main Room is the live home everyone lands in — open to ALL visitors,
-// signed in or not. Every other room is a free topic channel that just needs
-// a signed-in profile so your messages carry your name.
+// signed in or not. Every other room is free too; it just asks for a
+// signed-in profile so your messages carry your name.
 const MAIN_CHANNEL = { id: "main", name: "Main Room 🏠", guestOpen: true };
 
-// Free topic rooms, grouped for the sidebar. No prices, no ranks — signing in
-// (free) is all it takes to chat in any of them.
 const ROOM_GROUPS = [
-  { key: "community", label: "COMMUNITY", rooms: [MAIN_CHANNEL] },
+  {
+    key: "community",
+    label: "COMMUNITY",
+    rooms: [MAIN_CHANNEL, { id: "introductions", name: "Introductions 👋" }],
+  },
   {
     key: "creative",
     label: "CREATIVE",
@@ -84,7 +83,6 @@ const ROOM_GROUPS = [
   },
 ];
 
-// Flat list of every channel, tagged with its group for rendering.
 const CHANNELS = ROOM_GROUPS.flatMap((g) =>
   g.rooms.map((room) => ({ ...room, groupKey: g.key, groupLabel: g.label }))
 );
@@ -94,12 +92,8 @@ function channelById(id) {
 }
 function escapeHtml(str) {
   const div = document.createElement("div");
-  div.textContent = str;
+  div.textContent = str == null ? "" : str;
   return div.innerHTML;
-}
-// Show the handle (before the @), not everyone's full email.
-function authorHandle(email) {
-  return String(email || "").split("@")[0] || "member";
 }
 function formatTime(iso) {
   try {
@@ -108,9 +102,22 @@ function formatTime(iso) {
     return "";
   }
 }
+function formatDate(iso) {
+  try {
+    return new Date(iso).toLocaleDateString([], { year: "numeric", month: "short", day: "numeric" });
+  } catch (e) {
+    return "";
+  }
+}
+// A local-only id for live messages that aren't saved to the DB (guest posts,
+// or any post made while the table is briefly unreachable).
+function clientId() {
+  return "c-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
+}
 
-// A stable per-browser guest identity so ANY visitor can chat in the free
-// Main Room without an account. Signed-in users always use their real handle.
+// ---- identity ----
+// A stable per-browser guest id so ANY visitor can chat in the free Main Room
+// with no account. Signed-in members use their chosen display name.
 function guestId() {
   let g = null;
   try { g = localStorage.getItem("rekkies_guest_id"); } catch (e) {}
@@ -120,16 +127,26 @@ function guestId() {
   }
   return g;
 }
-// The author for a message — real email when signed in, else a guest handle
-// (rendered as the part before the @, e.g. "guest-4f2a").
-function currentAuthorEmail() {
-  return state.session ? state.session.user.email : guestId() + "@guest";
+// The display name shown in chat / presence for the current visitor.
+function displayName() {
+  if (state.session) {
+    const meta = state.session.user.user_metadata || {};
+    return meta.display_name || String(state.session.user.email || "").split("@")[0] || "member";
+  }
+  return guestId();
+}
+function isGuest() {
+  return !state.session;
+}
+// Can the current user delete this message? Only signed-in members, and only
+// their own saved messages (a numeric DB id + a matching user_id).
+function canDelete(m) {
+  return !!(state.session && m && m.user_id && m.user_id === state.session.user.id);
 }
 
-// Remember the last email used to log in so it's prefilled next time. The
-// Supabase session itself is persisted by the client (localStorage), so a
-// logged-in user stays logged in across reloads and doesn't re-enter anything;
-// the browser's own password manager saves the password via the login form.
+// Remember the last email so it's prefilled next time. The Supabase session is
+// persisted by the client, so a logged-in member stays logged in across
+// reloads and the browser's own password manager saves the password.
 function rememberedEmail() {
   try { return localStorage.getItem("rekkies_last_email") || ""; } catch (e) { return ""; }
 }
@@ -143,8 +160,9 @@ let state = {
   loading: true,
   activeChannelId: null,
   messages: [],
-  realtimeChannel: null,
-  realtimeReady: false,
+  rt: null,          // active realtime channel
+  rtReady: false,
+  onlineCount: 0,
 };
 
 async function refreshSession() {
@@ -152,39 +170,39 @@ async function refreshSession() {
   state.session = data.session;
   state.loading = false;
 
-  // If the room they're in now needs a sign-in they no longer have (they just
-  // signed out of a members-only room), drop them out so the Main Room
-  // fallback below kicks in.
+  // If they're sitting in a room that now needs a sign-in they no longer have
+  // (they just signed out), drop them so the Main Room fallback kicks in.
   const active = channelById(state.activeChannelId);
   if (active && !isChannelUnlocked(active)) {
-    unsubscribeRealtime();
+    await teardownRealtime();
     state.activeChannelId = null;
     state.messages = [];
   }
 
   render();
 
-  // EVERYONE — signed in or not — opens straight into the live Main Room.
-  // Only when nothing is active, so we don't yank someone out of a room they
-  // deliberately opened on a later refresh/token event.
+  // EVERYONE — member or guest — opens straight into the live Main Room.
+  // Only when nothing is active, so a later token refresh doesn't yank someone
+  // out of a room they deliberately opened.
   if (!state.activeChannelId) {
     await selectChannel("main");
+  } else {
+    // Re-track presence under the (possibly new) name after an auth change.
+    if (state.rt && state.rtReady) state.rt.track({ name: displayName() });
   }
 }
 
-async function signUp(email, password) {
+async function signUp(email, password, name) {
   rememberEmail(email);
-  const { data, error } = await sb.auth.signUp({ email, password });
+  const opts = name ? { data: { display_name: name } } : undefined;
+  const { data, error } = await sb.auth.signUp({ email, password, options: opts });
   if (error) {
     alert("Couldn't sign up: " + error.message);
     return;
   }
-  // If the project has email confirmation ON (the default), signUp returns no
-  // session — the user must click the emailed link first. If confirmation is
-  // OFF, a session comes back and onAuthStateChange logs them straight in.
-  if (data.session) {
-    // logged in immediately — the auth listener will land them in the Main Room
-  } else {
+  // Email confirmation ON (default) → no session; user must click the link.
+  // Confirmation OFF → a session comes back and onAuthStateChange logs them in.
+  if (!data.session) {
     alert("Account created! Check your email for a confirmation link, then log in.");
   }
 }
@@ -199,64 +217,107 @@ async function signOut() {
   await sb.auth.signOut();
 }
 
-// A room is open when it's the guest-open Main Room, or when the visitor has a
-// signed-in profile. Every room is FREE — there's nothing to buy.
+async function editName() {
+  if (!state.session) return;
+  const current = displayName();
+  const name = prompt("Your display name (shown in chat):", current);
+  if (name == null) return;
+  const trimmed = name.trim().slice(0, 32);
+  if (!trimmed || trimmed === current) return;
+  const { error } = await sb.auth.updateUser({ data: { display_name: trimmed } });
+  if (error) {
+    alert("Couldn't save your name: " + error.message);
+    return;
+  }
+  render();
+  if (state.rt && state.rtReady) state.rt.track({ name: trimmed });
+}
+
+// Every room is FREE. Main Room is open to all (guests too); the rest need a
+// signed-in profile so posts carry a name.
 function isChannelUnlocked(channel) {
   if (!channel) return false;
   if (channel.guestOpen) return true;
   return !!state.session;
 }
 
-// ---- chat ----
-// Live delivery is Supabase Realtime Broadcast (no table needed). If the
-// optional `messages` table exists, we also load history on open and save
-// each message; if it doesn't, chat just runs live-only and those calls are
-// silently ignored.
-function unsubscribeRealtime() {
-  if (state.realtimeChannel) {
-    sb.removeChannel(state.realtimeChannel);
-    state.realtimeChannel = null;
+// ---- realtime chat + presence ----
+async function teardownRealtime() {
+  if (state.rt) {
+    try { await state.rt.untrack(); } catch (e) {}
+    sb.removeChannel(state.rt);
+    state.rt = null;
   }
-  state.realtimeReady = false;
+  state.rtReady = false;
+  state.onlineCount = 0;
 }
 
 async function selectChannel(channelId) {
   const channel = channelById(channelId);
   if (!channel || !isChannelUnlocked(channel)) return;
 
-  unsubscribeRealtime();
+  await teardownRealtime();
   state.activeChannelId = channelId;
   state.messages = [];
-  renderChannelList();
+  renderRoomsMenu();
   renderChatHeader();
   renderMessages();
+  renderPresence();
 
-  // Best-effort history load (works only if the messages table has been
-  // created via schema.sql; otherwise we quietly start with a live-only room).
+  // Saved history load — works when the `messages` table exists (schema.sql).
+  // If it doesn't, this quietly fails and the room is simply live-only.
   try {
     const { data, error } = await sb
       .from("messages")
-      .select("author_email, content, created_at")
+      .select("id, channel_id, user_id, author_name, content, created_at")
       .eq("channel_id", channelId)
       .order("created_at", { ascending: true })
-      .limit(50);
-    if (!error && data && state.activeChannelId === channelId) state.messages = data;
+      .limit(200);
+    if (!error && data && state.activeChannelId === channelId) {
+      state.messages = data.map((m) => ({ ...m, is_guest: false }));
+    }
   } catch (e) {
-    /* table not set up — live-only room */
+    /* no table — live-only room */
   }
   renderMessages();
 
-  // Live messages via Broadcast — no database required.
-  const rt = sb.channel(`room:${channelId}`, { config: { broadcast: { self: false } } });
+  // Live messages (Broadcast) + who's-online (Presence) on one channel.
+  const myKey = state.session ? state.session.user.id : guestId();
+  const rt = sb.channel(`room:${channelId}`, {
+    config: { broadcast: { self: false }, presence: { key: myKey } },
+  });
   rt.on("broadcast", { event: "msg" }, ({ payload }) => {
     if (state.activeChannelId === channelId) {
-      state.messages.push(payload);
+      // Guard against a duplicate if we somehow already have this id.
+      if (!state.messages.some((m) => String(m.id) === String(payload.id))) {
+        state.messages.push(payload);
+        renderMessages();
+      }
+    }
+  });
+  rt.on("broadcast", { event: "del" }, ({ payload }) => {
+    if (state.activeChannelId === channelId) {
+      state.messages = state.messages.filter((m) => String(m.id) !== String(payload.id));
       renderMessages();
     }
-  }).subscribe((status) => {
-    if (status === "SUBSCRIBED") state.realtimeReady = true;
   });
-  state.realtimeChannel = rt;
+  // Count unique people in the room. Listen to sync AND the join/leave diffs:
+  // the client that subscribed first doesn't always get a `sync` when a later
+  // member joins, but it does get a `join` diff — so recount on all three.
+  const recount = () => {
+    state.onlineCount = Object.keys(rt.presenceState()).length;
+    renderPresence();
+  };
+  rt.on("presence", { event: "sync" }, recount);
+  rt.on("presence", { event: "join" }, recount);
+  rt.on("presence", { event: "leave" }, recount);
+  rt.subscribe(async (status) => {
+    if (status === "SUBSCRIBED") {
+      state.rtReady = true;
+      await rt.track({ name: displayName() });
+    }
+  });
+  state.rt = rt;
 }
 
 async function sendMessage(content) {
@@ -264,58 +325,131 @@ async function sendMessage(content) {
   const channel = channelById(state.activeChannelId);
   if (!channel || !isChannelUnlocked(channel) || !text) return;
 
-  const msg = {
-    author_email: currentAuthorEmail(),
+  let msg = {
+    id: null,
+    channel_id: channel.id,
+    user_id: state.session ? state.session.user.id : null,
+    author_name: displayName(),
+    is_guest: isGuest(),
     content: text,
     created_at: new Date().toISOString(),
   };
 
-  // Show it locally right away (broadcast is set self:false, so we won't get
-  // our own echo back), then push it live to everyone else in the room.
-  state.messages.push(msg);
-  renderMessages();
-  if (state.realtimeChannel && state.realtimeReady) {
-    state.realtimeChannel.send({ type: "broadcast", event: "msg", payload: msg });
-  }
-
-  // Best-effort persistence — only for signed-in users (the messages table,
-  // if present, ties each row to a user_id) and silently ignored if the table
-  // isn't set up. Guest messages stay live-only.
+  // Members: SAVE to the DB first so history persists and every client shares
+  // the same message id (needed so deletes match everywhere). If the table
+  // isn't there, fall back to a live-only client id.
   if (state.session) {
     try {
-      await sb.from("messages").insert({
-        channel_id: channel.id,
-        user_id: state.session.user.id,
-        author_email: msg.author_email,
-        content: msg.content,
-      });
+      const { data, error } = await sb
+        .from("messages")
+        .insert({
+          channel_id: channel.id,
+          user_id: state.session.user.id,
+          author_name: msg.author_name,
+          content: text,
+        })
+        .select("id, channel_id, user_id, author_name, content, created_at")
+        .single();
+      if (!error && data) msg = { ...data, is_guest: false };
+      else msg.id = clientId();
     } catch (e) {
-      /* no table — message stays live-only */
+      msg.id = clientId();
     }
+  } else {
+    // Guests chat live but aren't saved (RLS only lets members write).
+    msg.id = clientId();
+  }
+
+  // Local echo (broadcast is self:false), then push live to the room.
+  if (state.activeChannelId === channel.id) {
+    state.messages.push(msg);
+    renderMessages();
+  }
+  if (state.rt && state.rtReady) {
+    state.rt.send({ type: "broadcast", event: "msg", payload: msg });
   }
 }
 
+async function deleteMessage(id) {
+  const idx = state.messages.findIndex((m) => String(m.id) === String(id));
+  if (idx === -1) return;
+  const m = state.messages[idx];
+  if (!canDelete(m)) return;
+  if (!confirm("Delete this message for everyone?")) return;
+
+  // Remove locally first for a snappy feel.
+  state.messages.splice(idx, 1);
+  renderMessages();
+
+  // Remove the saved row (numeric ids are persisted DB rows).
+  if (/^\d+$/.test(String(m.id))) {
+    try { await sb.from("messages").delete().eq("id", m.id); } catch (e) {}
+  }
+  // Tell everyone else viewing the room to drop it too.
+  if (state.rt && state.rtReady) {
+    state.rt.send({ type: "broadcast", event: "del", payload: { id: m.id } });
+  }
+}
+
+// ---- menus (rooms + profile dropdowns in the header) ----
+function closeMenus() {
+  document.querySelectorAll(".menu-panel").forEach((p) => (p.hidden = true));
+  document.querySelectorAll(".menu-trigger").forEach((t) => t.setAttribute("aria-expanded", "false"));
+}
+function toggleMenu(trigger, panel) {
+  const willOpen = panel.hidden;
+  closeMenus();
+  panel.hidden = !willOpen;
+  trigger.setAttribute("aria-expanded", String(willOpen));
+}
+
 // ---- rendering ----
-function renderAuthBar() {
-  const bar = document.getElementById("authBar");
+function renderProfile() {
+  const bar = document.getElementById("profileBar");
   if (state.loading) {
-    bar.innerHTML = `<span class="auth-loading">Loading your profile…</span>`;
+    bar.innerHTML = `<span class="auth-loading">Loading…</span>`;
     return;
   }
   if (state.session) {
+    const name = displayName();
+    const email = state.session.user.email || "";
+    const initial = (name.trim()[0] || "R").toUpperCase();
+    const since = formatDate(state.session.user.created_at);
     bar.innerHTML = `
-      <span class="auth-status">Signed in as <strong>${escapeHtml(state.session.user.email)}</strong></span>
-      <button class="btn btn-ghost btn-small" id="signOutBtn">Sign out</button>`;
-    document.getElementById("signOutBtn").addEventListener("click", signOut);
+      <div class="menu" id="profileMenu">
+        <button class="menu-trigger profile-trigger" id="profileTrigger" aria-haspopup="true" aria-expanded="false">
+          <span class="avatar-mini">${escapeHtml(initial)}</span>
+          <span class="who-name">${escapeHtml(name)}</span>
+          <span class="caret">▾</span>
+        </button>
+        <div class="menu-panel profile-panel" id="profilePanel" hidden>
+          <div class="profile-head">
+            <div class="avatar">${escapeHtml(initial)}</div>
+            <div class="profile-id">
+              <div class="profile-name">${escapeHtml(name)}</div>
+              <div class="profile-email">${escapeHtml(email)}</div>
+            </div>
+          </div>
+          ${since ? `<div class="profile-meta">Member since ${escapeHtml(since)}</div>` : ""}
+          <div class="profile-actions">
+            <button class="btn btn-outline btn-small" id="editNameBtn">Edit name</button>
+            <button class="btn btn-ghost btn-small" id="signOutBtn">Sign out</button>
+          </div>
+        </div>
+      </div>`;
+    const trigger = document.getElementById("profileTrigger");
+    const panel = document.getElementById("profilePanel");
+    trigger.addEventListener("click", () => toggleMenu(trigger, panel));
+    document.getElementById("editNameBtn").addEventListener("click", () => { closeMenus(); editName(); });
+    document.getElementById("signOutBtn").addEventListener("click", () => { closeMenus(); signOut(); });
   } else {
     bar.innerHTML = `
       <form id="authForm" class="auth-form">
         <input type="email" id="authEmail" name="email" placeholder="you@email.com" autocomplete="username" required value="${escapeHtml(rememberedEmail())}" />
         <input type="password" id="authPassword" name="password" placeholder="password" autocomplete="current-password" required minlength="6" />
         <button type="submit" class="btn btn-primary btn-small">Log in</button>
-        <button type="button" id="signUpBtn" class="btn btn-outline btn-small">Sign up</button>
-      </form>
-      <span class="auth-hint">Log in with your email + password — your browser can save it, and you'll stay logged in. New here? Enter both, then hit Sign up. It's free.</span>`;
+        <button type="button" id="signUpBtn" class="btn btn-outline btn-small">Join</button>
+      </form>`;
     const form = document.getElementById("authForm");
     const emailInput = document.getElementById("authEmail");
     const passwordInput = document.getElementById("authPassword");
@@ -325,14 +459,16 @@ function renderAuthBar() {
     });
     document.getElementById("signUpBtn").addEventListener("click", () => {
       if (!form.reportValidity()) return;
-      signUp(emailInput.value.trim(), passwordInput.value);
+      const name = (prompt("Pick a display name for the club (shown in chat):") || "").trim().slice(0, 32);
+      signUp(emailInput.value.trim(), passwordInput.value, name);
     });
   }
 }
 
-function renderChannelList() {
-  const list = document.getElementById("channelList");
-  list.innerHTML = ROOM_GROUPS
+function renderRoomsMenu() {
+  const panel = document.getElementById("roomsPanel");
+  if (!panel) return;
+  panel.innerHTML = ROOM_GROUPS
     .map((g) => {
       const items = g.rooms
         .map((room) => {
@@ -340,24 +476,38 @@ function renderChannelList() {
           const unlocked = isChannelUnlocked(channel);
           const active = state.activeChannelId === channel.id;
           return `
-            <li class="channel-item tier-${g.key} ${unlocked ? "" : "locked"} ${active ? "active" : ""}" data-channel="${channel.id}">
-              ${unlocked ? "#" : "🔒"} ${channel.name}
+            <li class="channel-item ${unlocked ? "" : "locked"} ${active ? "active" : ""}" data-channel="${channel.id}" title="${escapeHtml(channel.name)}">
+              ${unlocked ? "#" : "🔒"} ${escapeHtml(channel.name)}
             </li>`;
         })
         .join("");
-      return `<div class="channel-group"><div class="channel-group-label tier-${g.key}-text">${g.label}</div><ul>${items}</ul></div>`;
+      return `<div class="channel-group"><div class="channel-group-label group-${g.key}">${g.label}</div><ul>${items}</ul></div>`;
     })
     .join("");
 
-  list.querySelectorAll(".channel-item:not(.locked)").forEach((el) => {
-    el.addEventListener("click", () => selectChannel(el.dataset.channel));
+  panel.querySelectorAll(".channel-item:not(.locked)").forEach((el) => {
+    el.addEventListener("click", () => {
+      selectChannel(el.dataset.channel);
+      closeMenus();
+    });
   });
 }
 
 function renderChatHeader() {
-  const header = document.getElementById("chatHeader");
   const channel = channelById(state.activeChannelId);
-  header.textContent = channel ? "# " + channel.name : "Pick a channel to start chatting";
+  document.getElementById("chatTitle").textContent = channel ? "# " + channel.name : "Pick a room";
+}
+
+function renderPresence() {
+  const el = document.getElementById("presence");
+  if (!state.activeChannelId || !state.rtReady) {
+    el.textContent = "";
+    el.classList.add("empty");
+    return;
+  }
+  const n = Math.max(state.onlineCount, 1);
+  el.textContent = n === 1 ? "1 here" : n + " here";
+  el.classList.remove("empty");
 }
 
 function renderMessages() {
@@ -367,7 +517,7 @@ function renderMessages() {
   const sendBtn = document.querySelector("#chatForm button");
 
   if (!channel) {
-    box.innerHTML = `<p class="chat-placeholder">No channel selected yet.</p>`;
+    box.innerHTML = `<p class="chat-placeholder">No room selected yet.</p>`;
     input.disabled = true;
     sendBtn.disabled = true;
     return;
@@ -376,47 +526,60 @@ function renderMessages() {
   const unlocked = isChannelUnlocked(channel);
   input.disabled = !unlocked;
   sendBtn.disabled = !unlocked;
-  input.placeholder = unlocked
-    ? "Message the channel…"
-    : "Sign in to chat in this room";
+  input.placeholder = unlocked ? "Message the room…" : "Sign in to chat in this room";
 
+  const me = displayName();
   box.innerHTML = state.messages.length
     ? state.messages
-        .map(
-          (m) => `
+        .map((m) => {
+          const cls = m.is_guest ? "guest" : m.author_name === me ? "me" : "";
+          const del = canDelete(m)
+            ? `<button class="msg-del" data-id="${escapeHtml(String(m.id))}" title="Delete message" aria-label="Delete message">×</button>`
+            : "";
+          return `
         <div class="chat-message">
-          <span class="chat-author">${escapeHtml(authorHandle(m.author_email))}</span>
+          <span class="chat-author ${cls}">${escapeHtml(m.author_name || "member")}</span>
           <span class="chat-time">${escapeHtml(formatTime(m.created_at))}</span>
           <span class="chat-text">${escapeHtml(m.content)}</span>
-        </div>`
-        )
+          ${del}
+        </div>`;
+        })
         .join("")
     : `<p class="chat-placeholder">No messages yet — say hi 👋</p>`;
+
+  box.querySelectorAll(".msg-del").forEach((el) => {
+    el.addEventListener("click", () => deleteMessage(el.dataset.id));
+  });
   box.scrollTop = box.scrollHeight;
 }
 
-function renderRooms() {
-  const banner = document.getElementById("membershipBanner");
-  if (state.session) {
-    banner.innerHTML = `Signed in as <strong>${escapeHtml(authorHandle(state.session.user.email))}</strong> — every room is open. You're in the live <strong>Main Room</strong>.`;
-  } else {
-    banner.innerHTML = `Welcome to the live <strong>Main Room</strong> — chat right now as a guest, or sign in above (it's free) to join every room with your own profile.`;
-  }
-
-  renderChannelList();
+function render() {
+  renderProfile();
+  renderRoomsMenu();
   renderChatHeader();
   renderMessages();
-}
-
-function render() {
-  renderAuthBar();
-  renderRooms();
+  renderPresence();
 }
 
 document.addEventListener("DOMContentLoaded", () => {
   render();
   refreshSession();
   sb.auth.onAuthStateChange(() => refreshSession());
+
+  // Rooms dropdown trigger (the panel content is (re)rendered by renderRoomsMenu).
+  const roomsTrigger = document.getElementById("roomsTrigger");
+  const roomsPanel = document.getElementById("roomsPanel");
+  if (roomsTrigger && roomsPanel) {
+    roomsTrigger.addEventListener("click", () => toggleMenu(roomsTrigger, roomsPanel));
+  }
+  // Click anywhere outside an open menu closes it.
+  document.addEventListener("click", (e) => {
+    if (!e.target.closest(".menu")) closeMenus();
+  });
+  // Esc closes menus too.
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeMenus();
+  });
 
   document.getElementById("chatForm").addEventListener("submit", (e) => {
     e.preventDefault();
