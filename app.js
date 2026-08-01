@@ -1,51 +1,32 @@
 /* ============================================================
    REKKIES CLUB — app.js
-   Vanilla JS, no build step. A standalone home for the Rekkies
-   club: the same 5 ranks and every room sourced from the
-   upgrade.chat/rekkies store, rebuilt here as real live chat rooms
-   gated by rank. This platform stands on its own — the Rekkies
-   Discord runs separately and is not part of this app.
+   Vanilla JS, no build step. A standalone, FREE community home for
+   the Rekkies club. The app opens straight into the live Main Room;
+   every room is a real live chat channel. No payments, no ranks to
+   buy — just sign in with your email + password and chat.
 
    Backed by Supabase — and it works OUT OF THE BOX with no database
    setup or SQL step:
-   • Accounts .... Supabase Auth (email + password).
-   • Membership .. stored on the user's own Auth record (user_metadata),
-                   so no custom table is needed and it follows the
-                   account across devices.
-   • Room chat ... Supabase Realtime Broadcast — live messages between
-                   everyone in a room, again with no table required.
-                   If the optional `messages` table from
-                   supabase/schema.sql exists, chat history is also
-                   loaded and saved; if not, chat is simply live-only.
+   • Profiles ..... Supabase Auth (email + password). Your profile —
+                    your handle in chat — is your account, saved in the
+                    app and carried across devices.
+   • Room chat .... Supabase Realtime Broadcast — live messages between
+                    everyone in a room, with no table required. If the
+                    optional `messages` table from supabase/schema.sql
+                    exists, chat history is also loaded and saved; if
+                    not, chat is simply live-only.
 
    Only the PUBLISHABLE key belongs here — this file is served as-is to
    every visitor's browser, so anything in it is public. The secret key
    must never be added to this file or committed to this repo.
 
    ---- OPTIONAL CONFIG (the app runs without any of these) ----
-   1. PAYMENT_LINKS[id]   — a Stripe or PayPal Payment Link per rank.
-      Leave a link blank and that rank's "Join" button runs in demo
-      mode (grants the rank on the account with no real charge).
-   2. supabase/schema.sql — run it once in the SQL Editor ONLY if you
-      want persistent chat history + server-enforced gating. Not
-      required for the platform to work.
-   3. Email confirmation is ON by default; turn it off in the dashboard
+   1. supabase/schema.sql — run it once in the SQL Editor ONLY if you
+      want persistent chat history. Not required for the app to work.
+   2. Email confirmation is ON by default; turn it off in the dashboard
       (Authentication → Providers → Email → Confirm email) if you want
       sign-up to log a user in immediately with no email step.
    ============================================================ */
-
-const PAYMENT_LINKS = {
-  soldier: "",
-  captain: "",
-  colonel: "",
-  general: "",
-  elite: "",
-};
-
-// Owner accounts — these emails always have permanent full access to every
-// room (top Elite rank) the moment they sign in, no payment or membership
-// needed. Compared case-insensitively.
-const OWNER_EMAILS = ["prophetdian@gmail.com"];
 
 const SUPABASE_URL = "https://ejhhjzamdittnbfvxsfx.supabase.co";
 const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_a8_nkU_F0ZmfX-4TjKl96g_qHJPUgmJ";
@@ -56,17 +37,20 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_a8_nkU_F0ZmfX-4TjKl96g_qHJPUgmJ
 // file and leaves the app blank. Keep this named `sb`.
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
-// Rank order matches the live Discord roles (higher rank keeps every
-// channel from the ranks below it).
-const TIERS = [
+// ---- rooms ----
+// The Main Room is the live home everyone lands in — open to ALL visitors,
+// signed in or not. Every other room is a free topic channel that just needs
+// a signed-in profile so your messages carry your name.
+const MAIN_CHANNEL = { id: "main", name: "Main Room 🏠", guestOpen: true };
+
+// Free topic rooms, grouped for the sidebar. No prices, no ranks — signing in
+// (free) is all it takes to chat in any of them.
+const ROOM_GROUPS = [
+  { key: "community", label: "COMMUNITY", rooms: [MAIN_CHANNEL] },
   {
-    id: "soldier",
-    rank: 1,
-    name: "REKKIES SOLDIER",
-    role: "SOLDIERS",
-    price: 25,
-    blurb: "👑 Join the Rekkies 👑\nand get access to the foundation channels.",
-    ownRooms: [
+    key: "creative",
+    label: "CREATIVE",
+    rooms: [
       { id: "musical-instruments", name: "Musical Instruments 🎹" },
       { id: "music-mixing", name: "Music Mixing 🎧" },
       { id: "music-production", name: "Music Production 🖥️" },
@@ -76,65 +60,35 @@ const TIERS = [
     ],
   },
   {
-    id: "captain",
-    rank: 2,
-    name: "REKKIES CAPTAIN",
-    role: "CAPTAINS",
-    price: 100,
-    blurb: "All Soldier channels, plus the Captain channels. We believe the knowledge shared here will immensely improve the success of your work.",
-    ownRooms: [
+    key: "tech",
+    label: "TECH & CONTENT",
+    rooms: [
       { id: "artificial-intelligence", name: "Artificial Intelligence 🤖" },
       { id: "creative-content", name: "Creative Content 🖋️" },
       { id: "systems", name: "Systems 🌐" },
     ],
   },
   {
-    id: "colonel",
-    rank: 3,
-    name: "REKKIES COLONEL",
-    role: "COLONELS",
-    price: 500,
-    blurb: "All Soldier and Captain channels, plus the Colonel channels.",
-    ownRooms: [
+    key: "business",
+    label: "BUSINESS",
+    rooms: [
       { id: "product", name: "Product 🏅" },
       { id: "sales", name: "Sales 🔥" },
       { id: "marketing", name: "Marketing 📢" },
     ],
   },
   {
-    id: "general",
-    rank: 4,
-    name: "REKKIES GENERAL",
-    role: "GENERALS",
-    price: 1000,
-    blurb: "All Soldier, Captain and Colonel channels, plus 10% off every Rekkies product, course, and service.",
-    ownRooms: [],
-  },
-  {
-    id: "elite",
-    rank: 5,
-    name: "REKKIES ELITE",
-    role: "ELITES",
-    price: 2500,
-    blurb: "✨ This is it ✨ Everything in General, plus the private ELITES channel — 24/7 direct communication with the professional entrepreneurs, media producers, and musicians behind The Rekkies.",
-    ownRooms: [{ id: "elites-private", name: "👑 ELITES — Private Room 👑" }],
+    key: "inner",
+    label: "INNER CIRCLE",
+    rooms: [{ id: "inner-circle", name: "👑 Inner Circle 👑" }],
   },
 ];
 
-// The free room — any signed-in user gets this with no payment at all.
-// requiredRank 0 means it's unlocked before a membership row even exists.
-const MAIN_CHANNEL = { id: "main", name: "Main Room 🏠", requiredRank: 0, groupKey: "main", groupLabel: "EVERYONE" };
+// Flat list of every channel, tagged with its group for rendering.
+const CHANNELS = ROOM_GROUPS.flatMap((g) =>
+  g.rooms.map((room) => ({ ...room, groupKey: g.key, groupLabel: g.label }))
+);
 
-const CHANNELS = [
-  MAIN_CHANNEL,
-  ...TIERS.flatMap((t) =>
-    t.ownRooms.map((room) => ({ ...room, requiredRank: t.rank, groupKey: t.id, groupLabel: t.role }))
-  ),
-];
-
-function tierById(id) {
-  return TIERS.find((t) => t.id === id) || null;
-}
 function channelById(id) {
   return CHANNELS.find((c) => c.id === id) || null;
 }
@@ -143,7 +97,7 @@ function escapeHtml(str) {
   div.textContent = str;
   return div.innerHTML;
 }
-// Discord-style: show the handle (before the @), not everyone's full email.
+// Show the handle (before the @), not everyone's full email.
 function authorHandle(email) {
   return String(email || "").split("@")[0] || "member";
 }
@@ -186,7 +140,6 @@ function rememberEmail(email) {
 // ---- state ----
 let state = {
   session: null,
-  membership: null, // { tier_id, rank }
   loading: true,
   activeChannelId: null,
   messages: [],
@@ -194,26 +147,14 @@ let state = {
   realtimeReady: false,
 };
 
-// Read the user's rank from their Auth record. A paid integration would set
-// app_metadata server-side (which users can't edit); demo joins use
-// user_metadata. We honor app_metadata first so real payments always win.
-function membershipFromUser(user) {
-  if (!user) return null;
-  const app = user.app_metadata || {};
-  const meta = user.user_metadata || {};
-  const rank = app.rank != null ? app.rank : meta.rank != null ? meta.rank : 0;
-  const tier_id = app.tier_id || meta.tier_id || null;
-  return rank > 0 && tier_id ? { tier_id, rank } : null;
-}
-
 async function refreshSession() {
   const { data } = await sb.auth.getSession();
   state.session = data.session;
-  state.membership = state.session ? membershipFromUser(state.session.user) : null;
   state.loading = false;
 
-  // If the room they're in is no longer usable — e.g. they just signed out of
-  // a paid room — drop them out of it so the Main Room fallback below kicks in.
+  // If the room they're in now needs a sign-in they no longer have (they just
+  // signed out of a members-only room), drop them out so the Main Room
+  // fallback below kicks in.
   const active = channelById(state.activeChannelId);
   if (active && !isChannelUnlocked(active)) {
     unsubscribeRealtime();
@@ -223,7 +164,7 @@ async function refreshSession() {
 
   render();
 
-  // EVERYONE — signed in or not — opens straight into the free Main Room.
+  // EVERYONE — signed in or not — opens straight into the live Main Room.
   // Only when nothing is active, so we don't yank someone out of a room they
   // deliberately opened on a later refresh/token event.
   if (!state.activeChannelId) {
@@ -258,70 +199,12 @@ async function signOut() {
   await sb.auth.signOut();
 }
 
-async function joinTier(tier) {
-  if (!state.session) {
-    alert("Sign in first (see the Club Rooms section) — membership is tied to your account.");
-    document.getElementById("rooms").scrollIntoView({ behavior: "smooth" });
-    return;
-  }
-
-  const link = PAYMENT_LINKS[tier.id];
-  if (link) {
-    window.open(link, "_blank", "noopener");
-    return;
-  }
-
-  const ok = confirm(
-    `Demo mode — no payment link is configured yet for ${tier.name} ($${tier.price}/mo).\n\n` +
-      `Grant the ${tier.role} rank on your account?`
-  );
-  if (!ok) return;
-
-  const { data, error } = await sb.auth.updateUser({
-    data: { tier_id: tier.id, rank: tier.rank },
-  });
-  if (error) {
-    alert("Couldn't save membership: " + error.message);
-    return;
-  }
-  state.membership = membershipFromUser(data.user) || { tier_id: tier.id, rank: tier.rank };
-  render();
-}
-
-async function leaveTier() {
-  if (!state.session) return;
-  const { data, error } = await sb.auth.updateUser({
-    data: { tier_id: null, rank: 0 },
-  });
-  if (error) {
-    alert("Couldn't update membership: " + error.message);
-    return;
-  }
-  state.membership = membershipFromUser(data.user);
-  render();
-  // They may have been sitting in a room that's now locked — drop them back
-  // into the free Main Room.
-  const active = channelById(state.activeChannelId);
-  if (state.session && (!active || !isChannelUnlocked(active))) await selectChannel("main");
-}
-
-// Is the signed-in user an owner account with permanent full access?
-function isOwner() {
-  const email = state.session && state.session.user && state.session.user.email;
-  return !!email && OWNER_EMAILS.includes(String(email).toLowerCase());
-}
-
-function currentRank() {
-  if (isOwner()) return 5; // owner — every room, always
-  return state.membership ? state.membership.rank : 0;
-}
-
+// A room is open when it's the guest-open Main Room, or when the visitor has a
+// signed-in profile. Every room is FREE — there's nothing to buy.
 function isChannelUnlocked(channel) {
   if (!channel) return false;
-  // The free Main Room (requiredRank 0) is open to EVERYONE — signed in or not.
-  if (channel.requiredRank === 0) return true;
-  // Paid rooms still require an account and the matching rank.
-  return !!state.session && currentRank() >= channel.requiredRank;
+  if (channel.guestOpen) return true;
+  return !!state.session;
 }
 
 // ---- chat ----
@@ -351,7 +234,7 @@ async function selectChannel(channelId) {
   // Best-effort history load (works only if the messages table has been
   // created via schema.sql; otherwise we quietly start with a live-only room).
   try {
-    const { data, error } = await supabase
+    const { data, error } = await sb
       .from("messages")
       .select("author_email, content, created_at")
       .eq("channel_id", channelId)
@@ -416,7 +299,7 @@ async function sendMessage(content) {
 function renderAuthBar() {
   const bar = document.getElementById("authBar");
   if (state.loading) {
-    bar.innerHTML = `<span class="auth-loading">Loading your account…</span>`;
+    bar.innerHTML = `<span class="auth-loading">Loading your profile…</span>`;
     return;
   }
   if (state.session) {
@@ -432,7 +315,7 @@ function renderAuthBar() {
         <button type="submit" class="btn btn-primary btn-small">Log in</button>
         <button type="button" id="signUpBtn" class="btn btn-outline btn-small">Sign up</button>
       </form>
-      <span class="auth-hint">Log in with your email + password — your browser can save it, and you'll stay logged in. New here? Enter both, then hit Sign up.</span>`;
+      <span class="auth-hint">Log in with your email + password — your browser can save it, and you'll stay logged in. New here? Enter both, then hit Sign up. It's free.</span>`;
     const form = document.getElementById("authForm");
     const emailInput = document.getElementById("authEmail");
     const passwordInput = document.getElementById("authPassword");
@@ -447,55 +330,13 @@ function renderAuthBar() {
   }
 }
 
-function renderRanks() {
-  const grid = document.getElementById("rankGrid");
-  const rank = currentRank();
-  grid.innerHTML = TIERS.map((t) => {
-    const isCurrent = isOwner() ? t.id === "elite" : state.membership && state.membership.tier_id === t.id;
-    const owned = rank >= t.rank;
-    const inheritedRooms = TIERS.filter((o) => o.rank < t.rank).flatMap((o) => o.ownRooms);
-    const roomsHtml = [
-      ...t.ownRooms.map((r) => `<li>${r.name}</li>`),
-      ...inheritedRooms.map((r) => `<li class="inherited">${r.name}</li>`),
-    ].join("");
-    return `
-      <div class="rank-card tier-${t.id}">
-        <div class="rank-card-head">
-          <span class="rank-name"><span class="rank-badge tier-${t.id}"></span>${t.name}</span>
-        </div>
-        <div class="rank-price tier-${t.id}-text">$${t.price}<span> / month</span></div>
-        <div class="rank-blurb">${t.blurb}</div>
-        ${roomsHtml ? `<ul class="rank-rooms tier-${t.id}">${roomsHtml}</ul>` : ""}
-        <div class="rank-actions">
-          ${
-            isCurrent
-              ? `<span class="rank-current tier-${t.id}-text">✓ Your current rank</span>`
-              : `<button class="btn btn-small btn-primary" data-join="${t.id}">${owned ? "Switch to this rank" : "Join as " + t.role}</button>`
-          }
-        </div>
-      </div>`;
-  }).join("");
-
-  grid.querySelectorAll("[data-join]").forEach((btn) => {
-    btn.addEventListener("click", () => joinTier(tierById(btn.dataset.join)));
-  });
-}
-
 function renderChannelList() {
   const list = document.getElementById("channelList");
-  const groups = [
-    { key: "main", label: "EVERYONE", channels: [MAIN_CHANNEL] },
-    ...TIERS.filter((t) => t.ownRooms.length > 0).map((t) => ({
-      key: t.id,
-      label: t.role,
-      channels: CHANNELS.filter((c) => c.groupKey === t.id),
-    })),
-  ];
-
-  list.innerHTML = groups
+  list.innerHTML = ROOM_GROUPS
     .map((g) => {
-      const items = g.channels
-        .map((channel) => {
+      const items = g.rooms
+        .map((room) => {
+          const channel = channelById(room.id);
           const unlocked = isChannelUnlocked(channel);
           const active = state.activeChannelId === channel.id;
           return `
@@ -537,7 +378,7 @@ function renderMessages() {
   sendBtn.disabled = !unlocked;
   input.placeholder = unlocked
     ? "Message the channel…"
-    : "Join this rank to chat here";
+    : "Sign in to chat in this room";
 
   box.innerHTML = state.messages.length
     ? state.messages
@@ -556,29 +397,19 @@ function renderMessages() {
 
 function renderRooms() {
   const banner = document.getElementById("membershipBanner");
-  const membership = state.membership ? tierById(state.membership.tier_id) : null;
-
-  if (!state.session) {
-    banner.innerHTML = `You're in the free <strong>Main Room</strong> — chat as a guest, or sign in above to unlock the paid rooms.`;
-  } else if (isOwner()) {
-    banner.innerHTML = `👑 Owner access — every room is unlocked for <strong>${escapeHtml(state.session.user.email)}</strong>.`;
-  } else if (membership) {
-    banner.innerHTML = `You're in as <strong>${membership.role}</strong> (${membership.name}). <button class="btn btn-ghost btn-small" id="leaveBtn">Leave rank (demo)</button>`;
+  if (state.session) {
+    banner.innerHTML = `Signed in as <strong>${escapeHtml(authorHandle(state.session.user.email))}</strong> — every room is open. You're in the live <strong>Main Room</strong>.`;
   } else {
-    banner.innerHTML = `You're free in the <strong>Main Room</strong> — join a paid rank above to unlock the rest.`;
+    banner.innerHTML = `Welcome to the live <strong>Main Room</strong> — chat right now as a guest, or sign in above (it's free) to join every room with your own profile.`;
   }
 
   renderChannelList();
   renderChatHeader();
   renderMessages();
-
-  const leaveBtn = document.getElementById("leaveBtn");
-  if (leaveBtn) leaveBtn.addEventListener("click", leaveTier);
 }
 
 function render() {
   renderAuthBar();
-  renderRanks();
   renderRooms();
 }
 

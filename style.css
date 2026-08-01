@@ -115,13 +115,12 @@ section h2 {
   font-size: 0.95rem;
 }
 
-/* Rank tier accent colors */
-.tier-main, .tier-main-text { color: var(--green); }
-.tier-soldier, .tier-soldier-text { color: var(--white); }
-.tier-captain, .tier-captain-text { color: var(--cyan); }
-.tier-colonel, .tier-colonel-text { color: var(--green); }
-.tier-general, .tier-general-text { color: var(--magenta); }
-.tier-elite-text {
+/* Channel-group accent colors */
+.tier-community, .tier-community-text { color: var(--green); }
+.tier-creative, .tier-creative-text { color: var(--white); }
+.tier-tech, .tier-tech-text { color: var(--cyan); }
+.tier-business, .tier-business-text { color: var(--magenta); }
+.tier-inner-text {
   background: linear-gradient(90deg, var(--cyan), var(--magenta), var(--green));
   -webkit-background-clip: text;
   background-clip: text;
