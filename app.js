@@ -233,19 +233,22 @@ async function editName() {
   if (state.rt && state.rtReady) state.rt.track({ name: trimmed });
 }
 
-// Every room is FREE. Main Room is open to all (guests too); the rest need a
-// signed-in profile so posts carry a name.
+// Every room is FREE and open to EVERYONE, guests included — nothing is gated.
+// (Signed-in members' messages persist to the DB; guests chat live like they
+// already do in the Main Room. The rank-named groups are just topic labels.)
 function isChannelUnlocked(channel) {
-  if (!channel) return false;
-  if (channel.guestOpen) return true;
-  return !!state.session;
+  return !!channel;
 }
 
 // ---- realtime chat + presence ----
-async function teardownRealtime() {
+// Tear down the current room's realtime channel. Deliberately SYNCHRONOUS and
+// fire-and-forget: awaiting untrack() on a channel that is still mid-subscribe
+// can stall for seconds, which used to make the FIRST room switch after page
+// load look broken ("can't change rooms"). removeChannel already cleans up.
+function teardownRealtime() {
   if (state.rt) {
-    try { await state.rt.untrack(); } catch (e) {}
-    sb.removeChannel(state.rt);
+    try { state.rt.untrack(); } catch (e) {}
+    try { sb.removeChannel(state.rt); } catch (e) {}
     state.rt = null;
   }
   state.rtReady = false;
@@ -256,7 +259,9 @@ async function selectChannel(channelId) {
   const channel = channelById(channelId);
   if (!channel || !isChannelUnlocked(channel)) return;
 
-  await teardownRealtime();
+  // Switch INSTANTLY — set the active room and repaint before any async work,
+  // so the UI never looks stuck no matter what the old channel is doing.
+  teardownRealtime();
   state.activeChannelId = channelId;
   state.messages = [];
   renderRoomsMenu();
@@ -313,6 +318,9 @@ async function selectChannel(channelId) {
   rt.on("presence", { event: "leave" }, recount);
   rt.subscribe(async (status) => {
     if (status === "SUBSCRIBED") {
+      // If the user already switched away before this finished subscribing,
+      // drop this orphaned channel instead of marking it ready.
+      if (state.activeChannelId !== channelId) { try { sb.removeChannel(rt); } catch (e) {} return; }
       state.rtReady = true;
       await rt.track({ name: displayName() });
     }
