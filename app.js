@@ -43,12 +43,12 @@ const MAIN_CHANNEL = { id: "main", name: "Main Room 🏠", guestOpen: true };
 const ROOM_GROUPS = [
   {
     key: "community",
-    label: "COMMUNITY",
+    label: "CLUB",
     rooms: [MAIN_CHANNEL],
   },
   {
     key: "creative",
-    label: "CREATIVE",
+    label: "SOLDIERS",
     rooms: [
       { id: "musical-instruments", name: "Musical Instruments 🎹" },
       { id: "music-mixing", name: "Music Mixing 🎧" },
@@ -60,7 +60,7 @@ const ROOM_GROUPS = [
   },
   {
     key: "tech",
-    label: "TECH & CONTENT",
+    label: "CAPTAINS",
     rooms: [
       { id: "artificial-intelligence", name: "Artificial Intelligence 🤖" },
       { id: "creative-content", name: "Creative Content 🖋️" },
@@ -69,7 +69,7 @@ const ROOM_GROUPS = [
   },
   {
     key: "business",
-    label: "BUSINESS",
+    label: "COLONELS",
     rooms: [
       { id: "product", name: "Product 🏅" },
       { id: "sales", name: "Sales 🔥" },
@@ -78,7 +78,7 @@ const ROOM_GROUPS = [
   },
   {
     key: "inner",
-    label: "INNER CIRCLE",
+    label: "GENERALS & ELITES",
     rooms: [{ id: "inner-circle", name: "👑 Inner Circle 👑" }],
   },
 ];
