@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>REKKIES CLUB</title>
+<meta name="description" content="REKKIES CLUB — the official home of the Rekkies Discord community. Ranks, rooms, and membership in one place." />
+<link rel="icon" type="image/png" href="assets/icon.png" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+<header class="site-header">
+  <div class="header-inner">
+    <a href="#top" class="brand">
+      <img src="assets/icon.png" alt="Rekkies" class="brand-icon" />
+      <span class="brand-name">REKKIES <em>CLUB</em></span>
+    </a>
+    <nav class="main-nav">
+      <a href="#ranks">Ranks</a>
+      <a href="#rooms">Club Rooms</a>
+      <a href="#join" class="nav-cta">Join Discord</a>
+    </nav>
+  </div>
+</header>
+
+<main id="top">
+
+  <section class="hero">
+    <img src="assets/logo.png" alt="REKKIES" class="hero-logo" />
+    <h1>👑 THE REKKIES 👑</h1>
+    <p class="hero-tagline">Musicians, creators, and entrepreneurs building together. Pick your rank, unlock your rooms, and see you inside.</p>
+    <div class="hero-actions">
+      <a href="#ranks" class="btn btn-gold">See Ranks</a>
+      <a href="#join" class="btn btn-outline">Join the Discord</a>
+    </div>
+  </section>
+
+  <section id="ranks" class="ranks">
+    <h2>Club Ranks</h2>
+    <p class="section-sub">Every rank stacks on the one before it — higher ranks keep everything below, plus their own rooms.</p>
+    <div id="rankGrid" class="rank-grid"><!-- rendered by app.js --></div>
+  </section>
+
+  <section id="rooms" class="rooms">
+    <h2>Club Rooms</h2>
+    <div id="membershipBanner" class="membership-banner"></div>
+    <div id="roomGrid" class="room-grid"><!-- rendered by app.js --></div>
+  </section>
+
+  <section id="join" class="join-cta">
+    <h2>Join the Rekkies Discord</h2>
+    <p>Membership is managed through Discord — pick a rank above, then head into the server.</p>
+    <a id="discordJoinBtn" class="btn btn-discord" href="#" target="_blank" rel="noopener">Join Discord Server</a>
+  </section>
+
+</main>
+
+<footer class="site-footer">
+  <img src="assets/icon.png" alt="" class="footer-icon" />
+  <p>REKKIES CLUB &middot; <a href="mailto:rekkiesculture@gmail.com">rekkiesculture@gmail.com</a></p>
+  <p class="footer-fine">Membership checkout runs in demo mode until real payment links are added. See README for setup.</p>
+</footer>
+
+<script src="app.js"></script>
+</body>
+</html>
