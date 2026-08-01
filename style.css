@@ -324,14 +324,26 @@ a { color: inherit; text-decoration: none; }
   .header-inner { padding: 10px 14px; }
   .chat-pane { min-height: 0; }
   .chat-messages { max-height: 62vh; }
-  /* Dropdowns: anchored to the right edge, never wider than the screen, and
-     with bigger tap targets so they work cleanly on phones. */
+  /* Dropdowns become a CENTERED modal on phones — fixed to the middle of the
+     screen no matter where the trigger sits, with a dimmed backdrop behind. */
   .menu-panel {
-    right: 0;
-    left: auto;
-    min-width: min(260px, calc(100vw - 20px));
-    max-width: calc(100vw - 16px);
-    max-height: 72vh;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    right: auto;
+    transform: translate(-50%, -50%);
+    width: min(360px, calc(100vw - 32px));
+    min-width: 0;
+    max-width: calc(100vw - 32px);
+    max-height: 76vh;
+    z-index: 60;
+  }
+  body.menu-open::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.6);
+    z-index: 50;
   }
   .channel-item { padding: 11px 12px; font-size: 0.95rem; }
   /* Logged-out auth form: let it wrap under the brand on small screens */

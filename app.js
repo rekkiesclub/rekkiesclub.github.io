@@ -392,15 +392,23 @@ async function deleteMessage(id) {
 }
 
 // ---- menus (rooms + profile dropdowns in the header) ----
+// On phones the panels render as a centered modal (see style.css); the body
+// `menu-open` class drives the dimmed backdrop behind them.
+function syncBackdrop() {
+  const anyOpen = [...document.querySelectorAll(".menu-panel")].some((p) => !p.hidden);
+  document.body.classList.toggle("menu-open", anyOpen);
+}
 function closeMenus() {
   document.querySelectorAll(".menu-panel").forEach((p) => (p.hidden = true));
   document.querySelectorAll(".menu-trigger").forEach((t) => t.setAttribute("aria-expanded", "false"));
+  document.body.classList.remove("menu-open");
 }
 function toggleMenu(trigger, panel) {
   const willOpen = panel.hidden;
   closeMenus();
   panel.hidden = !willOpen;
   trigger.setAttribute("aria-expanded", String(willOpen));
+  syncBackdrop();
 }
 
 // ---- rendering ----
