@@ -44,7 +44,7 @@ const ROOM_GROUPS = [
   {
     key: "community",
     label: "COMMUNITY",
-    rooms: [MAIN_CHANNEL, { id: "introductions", name: "Introductions 👋" }],
+    rooms: [MAIN_CHANNEL],
   },
   {
     key: "creative",
@@ -572,10 +572,14 @@ document.addEventListener("DOMContentLoaded", () => {
   if (roomsTrigger && roomsPanel) {
     roomsTrigger.addEventListener("click", () => toggleMenu(roomsTrigger, roomsPanel));
   }
-  // Click anywhere outside an open menu closes it.
-  document.addEventListener("click", (e) => {
+  // Tapping/clicking anywhere outside an open menu closes it. Listen for both
+  // click AND touchstart: on iOS Safari a document-level `click` doesn't fire
+  // reliably for taps on non-interactive areas, so touch needs its own hook.
+  const closeIfOutside = (e) => {
     if (!e.target.closest(".menu")) closeMenus();
-  });
+  };
+  document.addEventListener("click", closeIfOutside);
+  document.addEventListener("touchstart", closeIfOutside, { passive: true });
   // Esc closes menus too.
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeMenus();
