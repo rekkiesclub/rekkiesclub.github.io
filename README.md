@@ -16,7 +16,7 @@ palette only — `#000000` `#ffffff` `#00f7ff` `#fa00ff` `#00ff49`.
   straight in the Main Room and can chat right away (guests get a stable
   per-browser handle). No landing page, no funnel — the page *is* the chat.
 - **Rooms menu** — the topic channels (Community, Creative, Tech & Content,
-  Business, Inner Circle) live in a **"Rooms" dropdown at the top right**, not
+  Business, REKKIES) live in a **"Rooms" dropdown at the top right**, not
   in the main view. Open it, pick a room, and the chat switches. Every room is
   **free**. The Main Room is open to all; the rest just need a signed-in profile
   so posts carry a name (locked rooms show 🔒 until you sign in).

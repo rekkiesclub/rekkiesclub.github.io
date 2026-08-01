@@ -79,7 +79,7 @@ const ROOM_GROUPS = [
   {
     key: "inner",
     label: "GENERALS & ELITES",
-    rooms: [{ id: "inner-circle", name: "👑 Inner Circle 👑" }],
+    rooms: [{ id: "inner-circle", name: "👑 REKKIES 👑" }],
   },
 ];
 
