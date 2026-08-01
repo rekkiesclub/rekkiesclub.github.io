@@ -155,6 +155,33 @@ section h2 {
   letter-spacing: 0.5px;
 }
 
+/* Auth */
+.auth-bar {
+  max-width: 640px;
+  margin: 0 auto 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  font-size: 0.88rem;
+}
+.auth-status { color: var(--text-dim); }
+.auth-status strong { color: var(--text); }
+.auth-loading { color: var(--text-dim); }
+.auth-hint { color: var(--text-dim); font-size: 0.78rem; }
+.auth-form { display: flex; gap: 8px; }
+.auth-form input {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 8px 12px;
+  border-radius: 6px;
+  font-size: 0.88rem;
+  min-width: 200px;
+}
+.auth-form input:focus { outline: 2px solid var(--gold); border-color: var(--gold); }
+
 /* Rooms / membership */
 .rooms { max-width: 1100px; margin: 0 auto; padding: 20px 20px 60px; }
 .membership-banner {

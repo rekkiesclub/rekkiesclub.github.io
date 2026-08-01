@@ -1,14 +1,23 @@
 /* ============================================================
    REKKIES CLUB — app.js
-   Vanilla JS, no build step, no backend. Mirrors the live Discord
-   club run through upgrade.chat/rekkies: same 5 ranks, same
-   prices, same room lists, cumulative access.
+   Vanilla JS, no build step. Mirrors the live Discord club run
+   through upgrade.chat/rekkies: same 5 ranks, same prices, same
+   room lists, cumulative access.
 
-   ---- PENDING CONFIG (fill these in before going live) ----
+   Membership + accounts are backed by Supabase (Auth + Postgres).
+   Only the PUBLISHABLE key belongs here — this file is served
+   as-is to every visitor's browser, so anything in it is public.
+   The secret key must never be added to this file or committed
+   to this repo; row-level security on the `memberships` table is
+   what actually protects the data, not key secrecy.
+
+   ---- PENDING CONFIG ----
    1. DISCORD_INVITE_LINK — real invite code for the Rekkies server.
    2. PAYMENT_LINKS[id]   — a Stripe or PayPal Payment Link per
       rank. Leave a link blank and that rank's "Join" button runs
-      in demo mode (simulates membership locally, no real charge).
+      in demo mode (writes a membership row with no real charge).
+   3. supabase/schema.sql must be run once in the Supabase SQL
+      Editor before sign-up/membership will work (see README).
    ============================================================ */
 
 const DISCORD_INVITE_LINK = ""; // e.g. "https://discord.gg/xxxxxxx"
@@ -21,7 +30,9 @@ const PAYMENT_LINKS = {
   elite: "",
 };
 
-const STORAGE_KEY = "rekkies_membership";
+const SUPABASE_URL = "https://ejhhjzamdittnbfvxsfx.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_a8_nkU_F0ZmfX-4TjKl96g_qHJPUgmJ";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 // Rank order matches the live Discord roles (higher rank keeps every
 // room from the ranks below it). Colors are the actual Discord role
@@ -93,43 +104,124 @@ const TIERS = [
   },
 ];
 
-function getMembership() {
-  return localStorage.getItem(STORAGE_KEY) || null;
-}
-
-function setMembership(id) {
-  if (id) localStorage.setItem(STORAGE_KEY, id);
-  else localStorage.removeItem(STORAGE_KEY);
-  render();
-}
-
 function tierById(id) {
   return TIERS.find((t) => t.id === id) || null;
 }
 
-function currentRank() {
-  const m = tierById(getMembership());
-  return m ? m.rank : 0;
+// ---- state ----
+// session: Supabase auth session, or null when signed out
+// membership: { tier_id, rank } row from `memberships`, or null
+let state = { session: null, membership: null, loading: true };
+
+async function refreshSession() {
+  const { data } = await supabase.auth.getSession();
+  state.session = data.session;
+  if (state.session) {
+    const { data: row } = await supabase
+      .from("memberships")
+      .select("tier_id, rank")
+      .eq("user_id", state.session.user.id)
+      .maybeSingle();
+    state.membership = row || null;
+  } else {
+    state.membership = null;
+  }
+  state.loading = false;
+  render();
 }
 
-function joinTier(tier) {
+async function sendMagicLink(email) {
+  const { error } = await supabase.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.href },
+  });
+  if (error) alert("Couldn't send sign-in link: " + error.message);
+  else alert(`Check ${email} for a sign-in link.`);
+}
+
+async function signOut() {
+  await supabase.auth.signOut();
+}
+
+async function joinTier(tier) {
+  if (!state.session) {
+    alert("Sign in first (see the Club Rooms section) — membership is tied to your account.");
+    document.getElementById("rooms").scrollIntoView({ behavior: "smooth" });
+    return;
+  }
+
   const link = PAYMENT_LINKS[tier.id];
   if (link) {
     window.open(link, "_blank", "noopener");
     return;
   }
+
   const ok = confirm(
     `Demo mode — no payment link is configured yet for ${tier.name} ($${tier.price}/mo).\n\n` +
-      `Simulate becoming a ${tier.role} member on this device?`
+      `Simulate becoming a ${tier.role} member on your account?`
   );
-  if (ok) setMembership(tier.id);
+  if (!ok) return;
+
+  const { error } = await supabase.from("memberships").upsert({
+    user_id: state.session.user.id,
+    tier_id: tier.id,
+    rank: tier.rank,
+    updated_at: new Date().toISOString(),
+  });
+  if (error) {
+    alert("Couldn't save membership: " + error.message);
+    return;
+  }
+  state.membership = { tier_id: tier.id, rank: tier.rank };
+  render();
+}
+
+async function leaveTier() {
+  if (!state.session) return;
+  const { error } = await supabase.from("memberships").delete().eq("user_id", state.session.user.id);
+  if (error) {
+    alert("Couldn't update membership: " + error.message);
+    return;
+  }
+  state.membership = null;
+  render();
+}
+
+function currentRank() {
+  return state.membership ? state.membership.rank : 0;
+}
+
+function renderAuthBar() {
+  const bar = document.getElementById("authBar");
+  if (state.loading) {
+    bar.innerHTML = `<span class="auth-loading">Loading your account…</span>`;
+    return;
+  }
+  if (state.session) {
+    bar.innerHTML = `
+      <span class="auth-status">Signed in as <strong>${state.session.user.email}</strong></span>
+      <button class="btn btn-ghost btn-small" id="signOutBtn">Sign out</button>`;
+    document.getElementById("signOutBtn").addEventListener("click", signOut);
+  } else {
+    bar.innerHTML = `
+      <form id="signInForm" class="auth-form">
+        <input type="email" id="signInEmail" placeholder="you@email.com" required />
+        <button type="submit" class="btn btn-gold btn-small">Sign in / Sign up</button>
+      </form>
+      <span class="auth-hint">We'll email you a sign-in link — no password.</span>`;
+    document.getElementById("signInForm").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const email = document.getElementById("signInEmail").value.trim();
+      if (email) sendMagicLink(email);
+    });
+  }
 }
 
 function renderRanks() {
   const grid = document.getElementById("rankGrid");
   const rank = currentRank();
   grid.innerHTML = TIERS.map((t) => {
-    const isCurrent = getMembership() === t.id;
+    const isCurrent = state.membership && state.membership.tier_id === t.id;
     const owned = rank >= t.rank;
     const inheritedRooms = TIERS.filter((o) => o.rank < t.rank).flatMap((o) => o.ownRooms);
     const roomsHtml = [
@@ -162,10 +254,12 @@ function renderRanks() {
 function renderRooms() {
   const banner = document.getElementById("membershipBanner");
   const grid = document.getElementById("roomGrid");
-  const membership = tierById(getMembership());
+  const membership = state.membership ? tierById(state.membership.tier_id) : null;
   const rank = currentRank();
 
-  if (membership) {
+  if (!state.session) {
+    banner.innerHTML = `Sign in above to join a rank and unlock your rooms.`;
+  } else if (membership) {
     banner.innerHTML = `You're in as <strong>${membership.role}</strong> (${membership.name}). <button class="btn btn-ghost btn-small" id="leaveBtn">Leave rank (demo)</button>`;
   } else {
     banner.innerHTML = `You haven't joined a rank yet — pick one above to unlock your rooms.`;
@@ -184,7 +278,7 @@ function renderRooms() {
     .join("");
 
   const leaveBtn = document.getElementById("leaveBtn");
-  if (leaveBtn) leaveBtn.addEventListener("click", () => setMembership(null));
+  if (leaveBtn) leaveBtn.addEventListener("click", leaveTier);
 }
 
 function renderDiscordCta() {
@@ -201,6 +295,7 @@ function renderDiscordCta() {
 }
 
 function render() {
+  renderAuthBar();
   renderRanks();
   renderRooms();
 }
@@ -208,4 +303,6 @@ function render() {
 document.addEventListener("DOMContentLoaded", () => {
   render();
   renderDiscordCta();
+  refreshSession();
+  supabase.auth.onAuthStateChange(() => refreshSession());
 });
