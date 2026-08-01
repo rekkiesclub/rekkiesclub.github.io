@@ -4,8 +4,11 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>REKKIES CLUB</title>
-<meta name="description" content="REKKIES CLUB — the official home of the Rekkies Discord community. Ranks, rooms, and membership in one place." />
+<meta name="description" content="REKKIES CLUB — the official home of the Rekkies Discord community. Ranks, channels, and membership in one place." />
 <link rel="icon" type="image/png" href="assets/icon.png" />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link rel="stylesheet" href="style.css" />
 </head>
 <body>
@@ -29,16 +32,16 @@
   <section class="hero">
     <img src="assets/logo.png" alt="REKKIES" class="hero-logo" />
     <h1>👑 THE REKKIES 👑</h1>
-    <p class="hero-tagline">Musicians, creators, and entrepreneurs building together. Pick your rank, unlock your rooms, and see you inside.</p>
+    <p class="hero-tagline">Musicians, creators, and entrepreneurs building together. Pick your rank, unlock your channels, and see you inside.</p>
     <div class="hero-actions">
-      <a href="#ranks" class="btn btn-gold">See Ranks</a>
+      <a href="#ranks" class="btn btn-primary">See Ranks</a>
       <a href="#join" class="btn btn-outline">Join the Discord</a>
     </div>
   </section>
 
   <section id="ranks" class="ranks">
     <h2>Club Ranks</h2>
-    <p class="section-sub">Every rank stacks on the one before it — higher ranks keep everything below, plus their own rooms.</p>
+    <p class="section-sub">Every rank stacks on the one before it — higher ranks keep everything below, plus their own channels.</p>
     <div id="rankGrid" class="rank-grid"><!-- rendered by app.js --></div>
   </section>
 
@@ -46,7 +49,17 @@
     <h2>Club Rooms</h2>
     <div id="authBar" class="auth-bar"></div>
     <div id="membershipBanner" class="membership-banner"></div>
-    <div id="roomGrid" class="room-grid"><!-- rendered by app.js --></div>
+    <div class="discord-shell">
+      <aside id="channelList" class="channel-list"><!-- rendered by app.js --></aside>
+      <div class="chat-pane">
+        <div id="chatHeader" class="chat-header">Pick a channel to start chatting</div>
+        <div id="chatMessages" class="chat-messages"></div>
+        <form id="chatForm" class="chat-form">
+          <input id="chatInput" type="text" placeholder="Message the channel…" autocomplete="off" disabled />
+          <button type="submit" class="btn btn-primary btn-small" disabled>Send</button>
+        </form>
+      </div>
+    </div>
   </section>
 
   <section id="join" class="join-cta">

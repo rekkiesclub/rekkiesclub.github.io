@@ -1,8 +1,10 @@
--- REKKIES CLUB — membership table
+-- REKKIES CLUB — schema
 -- Run this once in the Supabase SQL Editor (Project: ejhhjzamdittnbfvxsfx) before
--- membership sign-up will work. The site's publishable key cannot run DDL, so this
--- step has to be done from the dashboard (or with a Postgres connection string).
+-- sign-up, membership, or the club-room chat will work. The site's publishable
+-- key cannot run DDL, so this step has to be done from the dashboard (or with
+-- a direct Postgres connection).
 
+-- ---- memberships: one row per user, which rank they hold ----
 create table if not exists public.memberships (
   user_id uuid primary key references auth.users(id) on delete cascade,
   tier_id text not null check (tier_id in ('soldier','captain','colonel','general','elite')),
@@ -25,3 +27,81 @@ create policy "update own membership"
   on public.memberships for update
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+create policy "delete own membership"
+  on public.memberships for delete
+  using (auth.uid() = user_id);
+
+-- ---- channels: the club's "rooms", one per Discord channel, gated by rank ----
+create table if not exists public.channels (
+  id text primary key,
+  tier_id text not null,
+  required_rank int not null check (required_rank between 1 and 5),
+  name text not null,
+  position int not null default 0
+);
+
+alter table public.channels enable row level security;
+
+create policy "channels are readable by everyone"
+  on public.channels for select
+  using (true);
+
+insert into public.channels (id, tier_id, required_rank, name, position) values
+  ('musical-instruments',  'soldier', 1, 'Musical Instruments 🎹',      1),
+  ('music-mixing',         'soldier', 1, 'Music Mixing 🎧',             2),
+  ('music-production',     'soldier', 1, 'Music Production 🖥️',        3),
+  ('photography',          'soldier', 1, 'Photography 📸',              4),
+  ('videography',          'soldier', 1, 'Videography 🎥',              5),
+  ('photo-video-editing',  'soldier', 1, 'Photo+Video Editing 📸📹',    6),
+  ('artificial-intelligence','captain',2, 'Artificial Intelligence 🤖', 7),
+  ('creative-content',     'captain', 2, 'Creative Content 🖋️',        8),
+  ('systems',              'captain', 2, 'Systems 🌐',                  9),
+  ('product',              'colonel', 3, 'Product 🏅',                 10),
+  ('sales',                'colonel', 3, 'Sales 🔥',                   11),
+  ('marketing',            'colonel', 3, 'Marketing 📢',               12),
+  ('elites-private',       'elite',   5, '👑 ELITES — Private Room 👑',13)
+on conflict (id) do nothing;
+
+-- ---- messages: the chat inside each channel ----
+create table if not exists public.messages (
+  id bigint generated always as identity primary key,
+  channel_id text not null references public.channels(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  author_email text not null,
+  content text not null check (char_length(content) between 1 and 2000),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists messages_channel_created_idx
+  on public.messages (channel_id, created_at);
+
+alter table public.messages enable row level security;
+
+create policy "select messages in unlocked channels"
+  on public.messages for select
+  using (
+    exists (
+      select 1
+      from public.channels c
+      join public.memberships m on m.user_id = auth.uid()
+      where c.id = messages.channel_id
+        and m.rank >= c.required_rank
+    )
+  );
+
+create policy "insert messages in unlocked channels"
+  on public.messages for insert
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1
+      from public.channels c
+      join public.memberships m on m.user_id = auth.uid()
+      where c.id = messages.channel_id
+        and m.rank >= c.required_rank
+    )
+  );
+
+-- live message updates for everyone currently viewing a channel
+alter publication supabase_realtime add table public.messages;
