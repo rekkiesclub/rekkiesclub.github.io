@@ -103,7 +103,16 @@ const TIERS = [
   },
 ];
 
-const CHANNELS = TIERS.flatMap((t) => t.ownRooms.map((room) => ({ ...room, tier: t })));
+// The free room — any signed-in user gets this with no payment at all.
+// requiredRank 0 means it's unlocked before a membership row even exists.
+const MAIN_CHANNEL = { id: "main", name: "Main Room 🏠", requiredRank: 0, groupKey: "main", groupLabel: "EVERYONE" };
+
+const CHANNELS = [
+  MAIN_CHANNEL,
+  ...TIERS.flatMap((t) =>
+    t.ownRooms.map((room) => ({ ...room, requiredRank: t.rank, groupKey: t.id, groupLabel: t.role }))
+  ),
+];
 
 function tierById(id) {
   return TIERS.find((t) => t.id === id) || null;
@@ -145,6 +154,13 @@ async function refreshSession() {
   }
   state.loading = false;
   render();
+
+  // Land straight in the free Main Room on login or on reopening the app
+  // with a still-valid session — but only once per session, not on every
+  // refresh (so it doesn't yank the user away from a channel they picked).
+  if (state.session && !state.activeChannelId) {
+    await selectChannel("main");
+  }
 }
 
 async function signUp(email, password) {
@@ -213,7 +229,7 @@ function currentRank() {
 }
 
 function isChannelUnlocked(channel) {
-  return currentRank() >= channel.tier.rank;
+  return !!state.session && currentRank() >= channel.requiredRank;
 }
 
 // ---- chat ----
@@ -341,21 +357,30 @@ function renderRanks() {
 
 function renderChannelList() {
   const list = document.getElementById("channelList");
-  list.innerHTML = TIERS.map((t) => {
-    if (t.ownRooms.length === 0) return "";
-    const items = t.ownRooms
-      .map((room) => {
-        const channel = channelById(room.id);
-        const unlocked = isChannelUnlocked(channel);
-        const active = state.activeChannelId === room.id;
-        return `
-          <li class="channel-item tier-${t.id} ${unlocked ? "" : "locked"} ${active ? "active" : ""}" data-channel="${room.id}">
-            ${unlocked ? "#" : "🔒"} ${room.name}
-          </li>`;
-      })
-      .join("");
-    return `<div class="channel-group"><div class="channel-group-label tier-${t.id}-text">${t.role}</div><ul>${items}</ul></div>`;
-  }).join("");
+  const groups = [
+    { key: "main", label: "EVERYONE", channels: [MAIN_CHANNEL] },
+    ...TIERS.filter((t) => t.ownRooms.length > 0).map((t) => ({
+      key: t.id,
+      label: t.role,
+      channels: CHANNELS.filter((c) => c.groupKey === t.id),
+    })),
+  ];
+
+  list.innerHTML = groups
+    .map((g) => {
+      const items = g.channels
+        .map((channel) => {
+          const unlocked = isChannelUnlocked(channel);
+          const active = state.activeChannelId === channel.id;
+          return `
+            <li class="channel-item tier-${g.key} ${unlocked ? "" : "locked"} ${active ? "active" : ""}" data-channel="${channel.id}">
+              ${unlocked ? "#" : "🔒"} ${channel.name}
+            </li>`;
+        })
+        .join("");
+      return `<div class="channel-group"><div class="channel-group-label tier-${g.key}-text">${g.label}</div><ul>${items}</ul></div>`;
+    })
+    .join("");
 
   list.querySelectorAll(".channel-item:not(.locked)").forEach((el) => {
     el.addEventListener("click", () => selectChannel(el.dataset.channel));
@@ -403,11 +428,11 @@ function renderRooms() {
   const membership = state.membership ? tierById(state.membership.tier_id) : null;
 
   if (!state.session) {
-    banner.innerHTML = `Sign in above to join a rank and unlock your channels.`;
+    banner.innerHTML = `Sign in above — the Main Room is free the moment you have an account.`;
   } else if (membership) {
     banner.innerHTML = `You're in as <strong>${membership.role}</strong> (${membership.name}). <button class="btn btn-ghost btn-small" id="leaveBtn">Leave rank (demo)</button>`;
   } else {
-    banner.innerHTML = `You haven't joined a rank yet — pick one above to unlock your channels.`;
+    banner.innerHTML = `You're free in the <strong>Main Room</strong> — join a paid rank above to unlock the rest.`;
   }
 
   renderChannelList();

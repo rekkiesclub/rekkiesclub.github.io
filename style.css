@@ -118,6 +118,7 @@ section h2 {
 }
 
 /* Rank tier accent colors */
+.tier-main, .tier-main-text { color: var(--green); }
 .tier-soldier, .tier-soldier-text { color: var(--white); }
 .tier-captain, .tier-captain-text { color: var(--cyan); }
 .tier-colonel, .tier-colonel-text { color: var(--green); }

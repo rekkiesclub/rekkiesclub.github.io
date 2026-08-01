@@ -31,7 +31,14 @@ palette only — `#000000` `#ffffff` `#00f7ff` `#fa00ff` `#00ff49`.
   rank, locked channels shown greyed out with 🔒) and a chat pane with live
   messages, backed by Supabase Realtime. Only channels at or below the
   signed-in user's rank can be opened, read, or posted in — enforced by
-  Postgres row-level security, not just hidden in the UI.
+  Postgres row-level security, not just hidden in the UI. Every channel is
+  always *visible* in the sidebar to every signed-in user, paid or not —
+  only entering/chatting is gated.
+
+- **Main Room** — free for anyone with an account, no payment required.
+  Logging in (or reopening the app with a still-active session) drops the
+  user straight into it. Users who haven't joined a paid rank see every
+  other channel locked but can chat here immediately.
 
 - **Join Discord** CTA — sends members into the actual Discord server too.
 
@@ -49,13 +56,17 @@ Project: `ejhhjzamdittnbfvxsfx` (https://ejhhjzamdittnbfvxsfx.supabase.co).
 - **`memberships` table** — one row per user: `user_id`, `tier_id`, `rank`.
   Row-level security means a signed-in user can only read/write their own
   row.
-- **`channels` table** — the 13 rooms/channels, each with a `required_rank`.
-  Publicly readable (just names/tiers, nothing sensitive) so the sidebar can
-  show locked channels to everyone.
-- **`messages` table** — the chat. RLS only allows reading/inserting into a
-  channel if the caller's `memberships.rank >= channels.required_rank` —
-  enforced server-side, so this can't be bypassed by editing the page.
-  Realtime is enabled on this table so open channels update live.
+- **`channels` table** — 14 rooms/channels (13 paid + the free Main Room at
+  `required_rank = 0`), each with a `required_rank`. Publicly readable (just
+  names/tiers, nothing sensitive) so the sidebar can show locked channels to
+  everyone.
+- **`messages` table** — the chat. RLS allows reading/inserting into a
+  channel only if the caller's effective rank — `memberships.rank`, or `0`
+  if they've never joined a paid tier — is `>= channels.required_rank`.
+  That `0` default is what makes the Main Room free without needing a
+  membership row to exist. Enforced server-side, so this can't be bypassed
+  by editing the page. Realtime is enabled on this table so open channels
+  update live.
 - **Setup required once**: run `supabase/schema.sql` in the Supabase
   dashboard's SQL Editor (Project → SQL Editor → paste → Run). The
   publishable key used by this static site can't run DDL, so this one step
@@ -100,8 +111,8 @@ club — its own accounts, its own chat — that sits alongside it.
 - `style.css` — Fredoka font, black/white/cyan/magenta/green theme
 - `app.js` — rank + channel data, Supabase-backed auth/membership/chat, rendering
 - `supabase/schema.sql` — `memberships`, `channels`, `messages` tables + RLS + realtime
-- `assets/logo.png`, `assets/icon.png` — Rekkies branding, pulled from the
-  live upgrade.chat store
+- `assets/rekkies-logo.png` — the official Rekkies crown logo, used as
+  favicon, header icon, hero logo, and footer icon
 
 ## Local preview
 

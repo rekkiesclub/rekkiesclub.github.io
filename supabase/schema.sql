@@ -4,7 +4,10 @@
 -- key cannot run DDL, so this step has to be done from the dashboard (or with
 -- a direct Postgres connection).
 
--- ---- memberships: one row per user, which rank they hold ----
+-- ---- memberships: one row per user, which paid rank they hold ----
+-- A user with NO row here is still a valid free member (rank 0) — see the
+-- messages RLS below, which treats a missing row as rank 0 rather than
+-- requiring one to exist.
 create table if not exists public.memberships (
   user_id uuid primary key references auth.users(id) on delete cascade,
   tier_id text not null check (tier_id in ('soldier','captain','colonel','general','elite')),
@@ -32,11 +35,13 @@ create policy "delete own membership"
   on public.memberships for delete
   using (auth.uid() = user_id);
 
--- ---- channels: the club's "rooms", one per Discord channel, gated by rank ----
+-- ---- channels: the club's rooms, one per Discord channel, gated by rank ----
+-- required_rank 0 = the free Main Room, open to any signed-in user with no
+-- payment at all. required_rank 1-5 = gated by the matching paid rank.
 create table if not exists public.channels (
   id text primary key,
   tier_id text not null,
-  required_rank int not null check (required_rank between 1 and 5),
+  required_rank int not null check (required_rank between 0 and 5),
   name text not null,
   position int not null default 0
 );
@@ -48,19 +53,20 @@ create policy "channels are readable by everyone"
   using (true);
 
 insert into public.channels (id, tier_id, required_rank, name, position) values
-  ('musical-instruments',  'soldier', 1, 'Musical Instruments 🎹',      1),
-  ('music-mixing',         'soldier', 1, 'Music Mixing 🎧',             2),
-  ('music-production',     'soldier', 1, 'Music Production 🖥️',        3),
-  ('photography',          'soldier', 1, 'Photography 📸',              4),
-  ('videography',          'soldier', 1, 'Videography 🎥',              5),
-  ('photo-video-editing',  'soldier', 1, 'Photo+Video Editing 📸📹',    6),
+  ('main',                  'main',    0, 'Main Room 🏠',               0),
+  ('musical-instruments',   'soldier', 1, 'Musical Instruments 🎹',     1),
+  ('music-mixing',          'soldier', 1, 'Music Mixing 🎧',            2),
+  ('music-production',      'soldier', 1, 'Music Production 🖥️',       3),
+  ('photography',           'soldier', 1, 'Photography 📸',             4),
+  ('videography',           'soldier', 1, 'Videography 🎥',             5),
+  ('photo-video-editing',   'soldier', 1, 'Photo+Video Editing 📸📹',   6),
   ('artificial-intelligence','captain',2, 'Artificial Intelligence 🤖', 7),
-  ('creative-content',     'captain', 2, 'Creative Content 🖋️',        8),
-  ('systems',              'captain', 2, 'Systems 🌐',                  9),
-  ('product',              'colonel', 3, 'Product 🏅',                 10),
-  ('sales',                'colonel', 3, 'Sales 🔥',                   11),
-  ('marketing',            'colonel', 3, 'Marketing 📢',               12),
-  ('elites-private',       'elite',   5, '👑 ELITES — Private Room 👑',13)
+  ('creative-content',      'captain', 2, 'Creative Content 🖋️',       8),
+  ('systems',               'captain', 2, 'Systems 🌐',                 9),
+  ('product',               'colonel', 3, 'Product 🏅',                10),
+  ('sales',                 'colonel', 3, 'Sales 🔥',                  11),
+  ('marketing',             'colonel', 3, 'Marketing 📢',              12),
+  ('elites-private',        'elite',   5, '👑 ELITES — Private Room 👑',13)
 on conflict (id) do nothing;
 
 -- ---- messages: the chat inside each channel ----
@@ -78,29 +84,21 @@ create index if not exists messages_channel_created_idx
 
 alter table public.messages enable row level security;
 
+-- A user's effective rank is their memberships.rank, or 0 (free) if they
+-- have never joined a paid tier — that 0 is what unlocks the Main Room.
 create policy "select messages in unlocked channels"
   on public.messages for select
   using (
-    exists (
-      select 1
-      from public.channels c
-      join public.memberships m on m.user_id = auth.uid()
-      where c.id = messages.channel_id
-        and m.rank >= c.required_rank
-    )
+    coalesce((select m.rank from public.memberships m where m.user_id = auth.uid()), 0)
+      >= (select c.required_rank from public.channels c where c.id = messages.channel_id)
   );
 
 create policy "insert messages in unlocked channels"
   on public.messages for insert
   with check (
     auth.uid() = user_id
-    and exists (
-      select 1
-      from public.channels c
-      join public.memberships m on m.user_id = auth.uid()
-      where c.id = messages.channel_id
-        and m.rank >= c.required_rank
-    )
+    and coalesce((select m.rank from public.memberships m where m.user_id = auth.uid()), 0)
+      >= (select c.required_rank from public.channels c where c.id = messages.channel_id)
   );
 
 -- live message updates for everyone currently viewing a channel
