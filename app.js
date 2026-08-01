@@ -1,8 +1,10 @@
 /* ============================================================
    REKKIES CLUB — app.js
-   Vanilla JS, no build step. A copy of the Rekkies Discord server:
-   the same 5 ranks and every room from upgrade.chat/rekkies, as real
-   chat rooms gated by rank exactly like the Discord roles.
+   Vanilla JS, no build step. A standalone home for the Rekkies
+   club: the same 5 ranks and every room sourced from the
+   upgrade.chat/rekkies store, rebuilt here as real live chat rooms
+   gated by rank. This platform stands on its own — the Rekkies
+   Discord runs separately and is not part of this app.
 
    Backed by Supabase — and it works OUT OF THE BOX with no database
    setup or SQL step:
@@ -21,19 +23,16 @@
    must never be added to this file or committed to this repo.
 
    ---- OPTIONAL CONFIG (the app runs without any of these) ----
-   1. DISCORD_INVITE_LINK — real invite code for the Rekkies server.
-   2. PAYMENT_LINKS[id]   — a Stripe or PayPal Payment Link per rank.
+   1. PAYMENT_LINKS[id]   — a Stripe or PayPal Payment Link per rank.
       Leave a link blank and that rank's "Join" button runs in demo
       mode (grants the rank on the account with no real charge).
-   3. supabase/schema.sql — run it once in the SQL Editor ONLY if you
+   2. supabase/schema.sql — run it once in the SQL Editor ONLY if you
       want persistent chat history + server-enforced gating. Not
       required for the platform to work.
-   4. Email confirmation is ON by default; turn it off in the dashboard
+   3. Email confirmation is ON by default; turn it off in the dashboard
       (Authentication → Providers → Email → Confirm email) if you want
       sign-up to log a user in immediately with no email step.
    ============================================================ */
-
-const DISCORD_INVITE_LINK = ""; // e.g. "https://discord.gg/xxxxxxx"
 
 const PAYMENT_LINKS = {
   soldier: "",
@@ -513,19 +512,6 @@ function renderRooms() {
   if (leaveBtn) leaveBtn.addEventListener("click", leaveTier);
 }
 
-function renderDiscordCta() {
-  const btn = document.getElementById("discordJoinBtn");
-  btn.addEventListener("click", (e) => {
-    if (!DISCORD_INVITE_LINK) {
-      e.preventDefault();
-      alert("Discord invite link isn't configured yet — add DISCORD_INVITE_LINK in app.js.");
-      return;
-    }
-    btn.href = DISCORD_INVITE_LINK;
-  });
-  if (DISCORD_INVITE_LINK) btn.href = DISCORD_INVITE_LINK;
-}
-
 function render() {
   renderAuthBar();
   renderRanks();
@@ -534,7 +520,6 @@ function render() {
 
 document.addEventListener("DOMContentLoaded", () => {
   render();
-  renderDiscordCta();
   refreshSession();
   supabase.auth.onAuthStateChange(() => refreshSession());
 

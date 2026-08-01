@@ -1,9 +1,11 @@
 # REKKIES CLUB
 
-The personal club app for **The Rekkies** — a static site (GitHub Pages, no build
-step, vanilla HTML/CSS/JS) built as a copy of the Rekkies Discord server: same
-ranks, rooms as real chat channels, gated exactly like the Discord roles run
-through [upgrade.chat/rekkies](https://upgrade.chat/rekkies).
+The members platform for **The Rekkies** — a standalone static site (GitHub
+Pages, no build step, vanilla HTML/CSS/JS). Its ranks and rooms are sourced
+from the [upgrade.chat/rekkies](https://upgrade.chat/rekkies) store, rebuilt
+here as real live chat channels gated by rank. **This app stands on its own —
+the Rekkies Discord runs separately and is not wired into it;** upgrade.chat is
+used only as the source of which ranks and rooms exist.
 
 Live at: https://rekkiesclub.github.io — **GitHub Pages is enabled and the
 site is up.** The app is fully functional as deployed: sign up, log in, land in
@@ -15,22 +17,21 @@ palette only — `#000000` `#ffffff` `#00f7ff` `#fa00ff` `#00ff49`.
 
 ## What it does
 
-- **Ranks** — the same 5 paid ranks as the live Discord club, in the same
-  order, at the same prices:
+- **Ranks** — the same 5 paid ranks as the upgrade.chat/rekkies store, in the
+  same order, at the same prices:
 
-  | Rank    | Price/mo | Discord role | Channels unlocked |
-  |---------|---------:|--------------|-----------------|
-  | Soldier | $25      | SOLDIERS     | Musical Instruments, Music Mixing, Music Production, Photography, Videography, Photo+Video Editing |
-  | Captain | $100     | CAPTAINS     | + Artificial Intelligence, Creative Content, Systems |
-  | Colonel | $500     | COLONELS     | + Product, Sales, Marketing |
-  | General | $1000    | GENERALS     | + 10% off all Rekkies products/courses/services |
-  | Elite   | $2500    | ELITES       | + private ELITES channel, 24/7 direct line to the team |
+  | Rank    | Price/mo | Rank badge | Channels unlocked |
+  |---------|---------:|------------|-----------------|
+  | Soldier | $25      | SOLDIERS   | Musical Instruments, Music Mixing, Music Production, Photography, Videography, Photo+Video Editing |
+  | Captain | $100     | CAPTAINS   | + Artificial Intelligence, Creative Content, Systems |
+  | Colonel | $500     | COLONELS   | + Product, Sales, Marketing |
+  | General | $1000    | GENERALS   | + 10% off all Rekkies products/courses/services |
+  | Elite   | $2500    | ELITES     | + private ELITES channel, 24/7 direct line to the team |
 
-  Each rank keeps every channel from the ranks below it, exactly like the
-  Discord role setup (`assign_at_billing_period` roles stack in upgrade.chat
-  too).
+  Each rank keeps every channel from the ranks below it — higher ranks stack on
+  the lower ones, matching how the tiers are described on upgrade.chat.
 
-- **Club Rooms** — a real Discord-style layout: a room sidebar (grouped by
+- **Club Rooms** — a sidebar/chat layout: a room sidebar (grouped by
   rank, locked rooms shown greyed out with 🔒) and a chat pane with live
   messages over Supabase Realtime. Every room is always *visible* in the
   sidebar to every signed-in user, paid or not — only entering/chatting is
@@ -42,8 +43,6 @@ palette only — `#000000` `#ffffff` `#00f7ff` `#fa00ff` `#00ff49`.
   Logging in (or reopening the app with a still-active session) drops the
   user straight into it. Users who haven't joined a paid rank see every
   other channel locked but can chat here immediately.
-
-- **Join Discord** CTA — sends members into the actual Discord server too.
 
 ## Supabase — works out of the box, no database setup
 
@@ -97,25 +96,19 @@ webhook), store it as a secret in that service, not in this codebase.
 
 Marked at the top of `app.js`:
 
-1. **`DISCORD_INVITE_LINK`** — currently empty. Paste in a real (ideally
-   non-expiring) invite link for the Rekkies Discord server.
-2. **`PAYMENT_LINKS`** — one entry per rank, all currently empty. Each rank's
+1. **`PAYMENT_LINKS`** — one entry per rank, all currently empty. Each rank's
    "Join" button runs in **demo mode** (grants the rank on the account with no
-   real charge) until you either:
-   - paste a Stripe or PayPal **Payment Link** per rank into `PAYMENT_LINKS`
-     in `app.js`, or
-   - keep using upgrade.chat itself for checkout/role-assignment and point
-     the buttons there instead — upgrade.chat already handles the
-     PayPal/Stripe billing and auto-assigns the matching Discord role, which
-     this static site can't do on its own (no bot).
-3. **`supabase/schema.sql`** — optional, for persistent chat history (above).
-4. **Confirm email** setting — see the Auth note above.
+   real charge) until you paste a Stripe or PayPal **Payment Link** per rank
+   into `PAYMENT_LINKS` in `app.js`.
+2. **`supabase/schema.sql`** — optional, for persistent chat history (above).
+3. **Confirm email** setting — see the Auth note above.
 
-Membership in this app does **not** talk to Discord or a payment processor —
-joining a rank here doesn't assign the matching Discord role. For real
-automatic role assignment on payment, upgrade.chat (or a custom Discord bot +
-payment webhook) is still required; this app is a full standalone copy of the
-club — its own accounts, its own chat — that sits alongside it.
+This app is a **self-contained platform** — its own accounts, its own live
+chat rooms. It does not talk to Discord or to a payment processor; joining a
+rank here grants access inside this app only. The Rekkies Discord runs
+separately and is not connected to this app. When you're ready to charge for
+ranks, add real `PAYMENT_LINKS` (and, if you want membership set server-side on
+payment, a webhook that writes `app_metadata.rank`).
 
 ## Structure
 
