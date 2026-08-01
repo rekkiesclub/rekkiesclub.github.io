@@ -1,8 +1,15 @@
--- REKKIES CLUB — schema
--- Run this once in the Supabase SQL Editor (Project: ejhhjzamdittnbfvxsfx) before
--- sign-up, membership, or the club-room chat will work. The site's publishable
--- key cannot run DDL, so this step has to be done from the dashboard (or with
--- a direct Postgres connection).
+-- REKKIES CLUB — schema (OPTIONAL)
+--
+-- The app works WITHOUT this file: accounts use Supabase Auth, membership is
+-- stored on each user's Auth record (user_metadata), and room chat runs over
+-- Supabase Realtime Broadcast — none of which need a database table.
+--
+-- Run this once in the Supabase SQL Editor (Project: ejhhjzamdittnbfvxsfx)
+-- ONLY if you want to upgrade chat from live-only to PERSISTENT: with the
+-- `messages` table below, chat history is loaded when a room opens and every
+-- message is saved. The `memberships`/`channels` tables are here too for a
+-- future server-enforced (RLS) gating model once real payments are added.
+-- The publishable key can't run DDL, so this must be done from the dashboard.
 
 -- ---- memberships: one row per user, which paid rank they hold ----
 -- A user with NO row here is still a valid free member (rank 0) — see the

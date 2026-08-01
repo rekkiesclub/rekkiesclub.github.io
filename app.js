@@ -1,27 +1,36 @@
 /* ============================================================
    REKKIES CLUB — app.js
    Vanilla JS, no build step. A copy of the Rekkies Discord server:
-   same 5 ranks, same prices, rooms as real chat channels, gated by
-   rank exactly like the Discord roles.
+   the same 5 ranks and every room from upgrade.chat/rekkies, as real
+   chat rooms gated by rank exactly like the Discord roles.
 
-   Accounts, membership, and chat are all backed by Supabase (Auth +
-   Postgres + Realtime). Only the PUBLISHABLE key belongs here — this
-   file is served as-is to every visitor's browser, so anything in it
-   is public. The secret key must never be added to this file or
-   committed to this repo; row-level security on the tables is what
-   actually protects the data, not key secrecy.
+   Backed by Supabase — and it works OUT OF THE BOX with no database
+   setup or SQL step:
+   • Accounts .... Supabase Auth (email + password).
+   • Membership .. stored on the user's own Auth record (user_metadata),
+                   so no custom table is needed and it follows the
+                   account across devices.
+   • Room chat ... Supabase Realtime Broadcast — live messages between
+                   everyone in a room, again with no table required.
+                   If the optional `messages` table from
+                   supabase/schema.sql exists, chat history is also
+                   loaded and saved; if not, chat is simply live-only.
 
-   ---- PENDING CONFIG ----
+   Only the PUBLISHABLE key belongs here — this file is served as-is to
+   every visitor's browser, so anything in it is public. The secret key
+   must never be added to this file or committed to this repo.
+
+   ---- OPTIONAL CONFIG (the app runs without any of these) ----
    1. DISCORD_INVITE_LINK — real invite code for the Rekkies server.
-   2. PAYMENT_LINKS[id]   — a Stripe or PayPal Payment Link per
-      rank. Leave a link blank and that rank's "Join" button runs
-      in demo mode (writes a membership row with no real charge).
-   3. supabase/schema.sql must be run once in the Supabase SQL
-      Editor before sign-up/membership/chat will work (see README).
-   4. By default Supabase requires clicking an email confirmation
-      link before a new password account can sign in. Turn that off
-      in the dashboard (Authentication → Providers → Email → Confirm
-      email) if you want sign-up to log a user in immediately.
+   2. PAYMENT_LINKS[id]   — a Stripe or PayPal Payment Link per rank.
+      Leave a link blank and that rank's "Join" button runs in demo
+      mode (grants the rank on the account with no real charge).
+   3. supabase/schema.sql — run it once in the SQL Editor ONLY if you
+      want persistent chat history + server-enforced gating. Not
+      required for the platform to work.
+   4. Email confirmation is ON by default; turn it off in the dashboard
+      (Authentication → Providers → Email → Confirm email) if you want
+      sign-up to log a user in immediately with no email step.
    ============================================================ */
 
 const DISCORD_INVITE_LINK = ""; // e.g. "https://discord.gg/xxxxxxx"
@@ -145,18 +154,26 @@ let state = {
   activeChannelId: null,
   messages: [],
   realtimeChannel: null,
+  realtimeReady: false,
 };
+
+// Read the user's rank from their Auth record. A paid integration would set
+// app_metadata server-side (which users can't edit); demo joins use
+// user_metadata. We honor app_metadata first so real payments always win.
+function membershipFromUser(user) {
+  if (!user) return null;
+  const app = user.app_metadata || {};
+  const meta = user.user_metadata || {};
+  const rank = app.rank != null ? app.rank : meta.rank != null ? meta.rank : 0;
+  const tier_id = app.tier_id || meta.tier_id || null;
+  return rank > 0 && tier_id ? { tier_id, rank } : null;
+}
 
 async function refreshSession() {
   const { data } = await supabase.auth.getSession();
   state.session = data.session;
   if (state.session) {
-    const { data: row } = await supabase
-      .from("memberships")
-      .select("tier_id, rank")
-      .eq("user_id", state.session.user.id)
-      .maybeSingle();
-    state.membership = row || null;
+    state.membership = membershipFromUser(state.session.user);
   } else {
     state.membership = null;
     state.activeChannelId = null;
@@ -214,35 +231,36 @@ async function joinTier(tier) {
 
   const ok = confirm(
     `Demo mode — no payment link is configured yet for ${tier.name} ($${tier.price}/mo).\n\n` +
-      `Simulate becoming a ${tier.role} member on your account?`
+      `Grant the ${tier.role} rank on your account?`
   );
   if (!ok) return;
 
-  const { error } = await supabase.from("memberships").upsert({
-    user_id: state.session.user.id,
-    tier_id: tier.id,
-    rank: tier.rank,
-    updated_at: new Date().toISOString(),
+  const { data, error } = await supabase.auth.updateUser({
+    data: { tier_id: tier.id, rank: tier.rank },
   });
   if (error) {
     alert("Couldn't save membership: " + error.message);
     return;
   }
-  state.membership = { tier_id: tier.id, rank: tier.rank };
+  state.membership = membershipFromUser(data.user) || { tier_id: tier.id, rank: tier.rank };
   render();
 }
 
 async function leaveTier() {
   if (!state.session) return;
-  const { error } = await supabase.from("memberships").delete().eq("user_id", state.session.user.id);
+  const { data, error } = await supabase.auth.updateUser({
+    data: { tier_id: null, rank: 0 },
+  });
   if (error) {
     alert("Couldn't update membership: " + error.message);
     return;
   }
-  state.membership = null;
-  state.activeChannelId = null;
-  unsubscribeRealtime();
+  state.membership = membershipFromUser(data.user);
   render();
+  // They may have been sitting in a room that's now locked — drop them back
+  // into the free Main Room.
+  const active = channelById(state.activeChannelId);
+  if (state.session && (!active || !isChannelUnlocked(active))) await selectChannel("main");
 }
 
 function currentRank() {
@@ -254,11 +272,16 @@ function isChannelUnlocked(channel) {
 }
 
 // ---- chat ----
+// Live delivery is Supabase Realtime Broadcast (no table needed). If the
+// optional `messages` table exists, we also load history on open and save
+// each message; if it doesn't, chat just runs live-only and those calls are
+// silently ignored.
 function unsubscribeRealtime() {
   if (state.realtimeChannel) {
     supabase.removeChannel(state.realtimeChannel);
     state.realtimeChannel = null;
   }
+  state.realtimeReady = false;
 }
 
 async function selectChannel(channelId) {
@@ -272,39 +295,64 @@ async function selectChannel(channelId) {
   renderChatHeader();
   renderMessages();
 
-  const { data, error } = await supabase
-    .from("messages")
-    .select("id, user_id, author_email, content, created_at")
-    .eq("channel_id", channelId)
-    .order("created_at", { ascending: true })
-    .limit(50);
-
-  if (!error) state.messages = data || [];
+  // Best-effort history load (works only if the messages table has been
+  // created via schema.sql; otherwise we quietly start with a live-only room).
+  try {
+    const { data, error } = await supabase
+      .from("messages")
+      .select("author_email, content, created_at")
+      .eq("channel_id", channelId)
+      .order("created_at", { ascending: true })
+      .limit(50);
+    if (!error && data && state.activeChannelId === channelId) state.messages = data;
+  } catch (e) {
+    /* table not set up — live-only room */
+  }
   renderMessages();
 
-  state.realtimeChannel = supabase
-    .channel(`messages-${channelId}`)
-    .on(
-      "postgres_changes",
-      { event: "INSERT", schema: "public", table: "messages", filter: `channel_id=eq.${channelId}` },
-      (payload) => {
-        state.messages.push(payload.new);
-        renderMessages();
-      }
-    )
-    .subscribe();
+  // Live messages via Broadcast — no database required.
+  const rt = supabase.channel(`room:${channelId}`, { config: { broadcast: { self: false } } });
+  rt.on("broadcast", { event: "msg" }, ({ payload }) => {
+    if (state.activeChannelId === channelId) {
+      state.messages.push(payload);
+      renderMessages();
+    }
+  }).subscribe((status) => {
+    if (status === "SUBSCRIBED") state.realtimeReady = true;
+  });
+  state.realtimeChannel = rt;
 }
 
 async function sendMessage(content) {
+  const text = content.trim();
   const channel = channelById(state.activeChannelId);
-  if (!channel || !state.session || !isChannelUnlocked(channel) || !content.trim()) return;
-  const { error } = await supabase.from("messages").insert({
-    channel_id: channel.id,
-    user_id: state.session.user.id,
+  if (!channel || !state.session || !isChannelUnlocked(channel) || !text) return;
+
+  const msg = {
     author_email: state.session.user.email,
-    content: content.trim(),
-  });
-  if (error) alert("Couldn't send message: " + error.message);
+    content: text,
+    created_at: new Date().toISOString(),
+  };
+
+  // Show it locally right away (broadcast is set self:false, so we won't get
+  // our own echo back), then push it live to everyone else in the room.
+  state.messages.push(msg);
+  renderMessages();
+  if (state.realtimeChannel && state.realtimeReady) {
+    state.realtimeChannel.send({ type: "broadcast", event: "msg", payload: msg });
+  }
+
+  // Best-effort persistence — silently ignored if the messages table isn't set up.
+  try {
+    await supabase.from("messages").insert({
+      channel_id: channel.id,
+      user_id: state.session.user.id,
+      author_email: msg.author_email,
+      content: msg.content,
+    });
+  } catch (e) {
+    /* no table — message stays live-only */
+  }
 }
 
 // ---- rendering ----
