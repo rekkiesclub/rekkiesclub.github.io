@@ -20,6 +20,14 @@
 
 * { box-sizing: border-box; }
 
+/* The `hidden` attribute must ALWAYS win. Layout rules below set
+   `display: flex` on .gate / .club / .menu, and an author `display` rule
+   overrides the browser's default `[hidden] { display: none }` — which left
+   the gate and the club both painted at once (the gate never went away after
+   login, rooms were never hidden). This `!important` guarantees anything with
+   the hidden attribute is truly gone. */
+[hidden] { display: none !important; }
+
 html, body { height: 100%; }
 
 body {
