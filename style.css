@@ -247,12 +247,13 @@ a { color: inherit; text-decoration: none; }
 .channel-group { margin-bottom: 14px; }
 .channel-group:last-child { margin-bottom: 0; }
 .channel-group-label {
-  font-size: 0.72rem;
-  font-weight: 600;
+  font-size: 1rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.7px;
-  padding: 4px 10px 6px;
+  letter-spacing: 1px;
+  padding: 8px 10px 8px;
   opacity: 0.9;
+  text-align: center;
 }
 .group-community { color: var(--green); }
 .group-creative { color: var(--white); }
