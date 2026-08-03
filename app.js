@@ -550,14 +550,34 @@ function renderPresence() {
   el.classList.remove("empty");
 }
 
-// Photo/video markup for a message that carries media.
+// ---- full-quality photo lightbox ----
+function openLightbox(src) {
+  const lb = document.getElementById("lightbox");
+  const img = document.getElementById("lightboxImg");
+  if (!lb || !img) return;
+  img.src = src;
+  lb.hidden = false;
+  lb.setAttribute("aria-hidden", "false");
+}
+function closeLightbox() {
+  const lb = document.getElementById("lightbox");
+  const img = document.getElementById("lightboxImg");
+  if (!lb) return;
+  lb.hidden = true;
+  lb.setAttribute("aria-hidden", "true");
+  if (img) img.src = "";
+}
+
+// Photo/video markup for a message that carries media. Shows the media ONLY —
+// no storage filename/URL is exposed (the image no longer links out to its raw
+// Supabase URL); tapping a photo opens it full-quality in the lightbox instead.
 function renderMedia(m) {
   if (!m.media_url) return "";
   const url = escapeHtml(m.media_url);
   if (m.media_type === "video") {
     return `<video class="chat-media" src="${url}" controls playsinline preload="metadata"></video>`;
   }
-  return `<a class="chat-media-link" href="${url}" target="_blank" rel="noopener"><img class="chat-media" src="${url}" alt="shared photo" loading="lazy" /></a>`;
+  return `<img class="chat-media" src="${url}" alt="" loading="lazy" />`;
 }
 
 function renderMessages() {
@@ -590,10 +610,16 @@ function renderMessages() {
             ? `<button class="msg-del" data-id="${escapeHtml(String(m.id))}" title="Delete message" aria-label="Delete message">×</button>`
             : "";
           const text = m.content ? `<span class="chat-text">${escapeHtml(m.content)}</span>` : "";
+          // Photos and videos show CLEAN — just the media (and any caption). No
+          // author name, no timestamp, no storage filename. Text-only messages
+          // keep their author + time as before.
+          const isMedia = !!m.media_url;
+          const author = isMedia ? "" : `<span class="chat-author ${cls}">${escapeHtml(m.author_name || "member")}</span>`;
+          const time = isMedia ? "" : `<span class="chat-time">${escapeHtml(formatTime(m.created_at))}</span>`;
           return `
-        <div class="chat-message">
-          <span class="chat-author ${cls}">${escapeHtml(m.author_name || "member")}</span>
-          <span class="chat-time">${escapeHtml(formatTime(m.created_at))}</span>
+        <div class="chat-message${isMedia ? " media-only" : ""}">
+          ${author}
+          ${time}
           ${text}
           ${renderMedia(m)}
           ${del}
@@ -604,6 +630,10 @@ function renderMessages() {
 
   box.querySelectorAll(".msg-del").forEach((el) => {
     el.addEventListener("click", () => deleteMessage(el.dataset.id));
+  });
+  // Tap a photo to view it full-quality in the lightbox (no URL is opened).
+  box.querySelectorAll("img.chat-media").forEach((img) => {
+    img.addEventListener("click", () => openLightbox(img.src));
   });
   box.scrollTop = box.scrollHeight;
 }
@@ -645,10 +675,14 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   document.addEventListener("click", closeIfOutside);
   document.addEventListener("touchstart", closeIfOutside, { passive: true });
-  // Esc closes menus too.
+  // Esc closes menus too (and the photo lightbox).
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeMenus();
+    if (e.key === "Escape") { closeMenus(); closeLightbox(); }
   });
+
+  // Tapping the photo lightbox anywhere closes it.
+  const lightbox = document.getElementById("lightbox");
+  if (lightbox) lightbox.addEventListener("click", closeLightbox);
 
   document.getElementById("chatForm").addEventListener("submit", (e) => {
     e.preventDefault();
