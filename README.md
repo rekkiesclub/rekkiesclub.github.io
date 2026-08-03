@@ -1,9 +1,11 @@
 # REKKIES CLUB
 
-The members platform for **The Rekkies** — a standalone static site (GitHub
-Pages, no build step, vanilla HTML / CSS / JS). Sign in with your email and
-password, get a profile, land in the live **Main Room**, and chat in real time
-with the community. Free to join — there's nothing to buy.
+The **private** members platform for **The Rekkies** — a standalone static
+site (GitHub Pages, no build step, vanilla HTML / CSS / JS). The whole app is
+for **real-life Rekkies only**: there is **no sign-up and no guest access**.
+Accounts are created manually by the club; a member logs in with the email +
+password they were given, lands in the live **Main Room**, and chats in real
+time with the community.
 
 Live at: **https://rekkiesclub.github.io**
 
@@ -12,19 +14,18 @@ palette only — `#000000` `#ffffff` `#00f7ff` `#fa00ff` `#00ff49`.
 
 ## What it does
 
-- **Opens in the live Main Room** — every visitor, signed in or not, lands
-  straight in the Main Room and can chat right away (guests get a stable
-  per-browser handle). No landing page, no funnel — the page *is* the chat.
-- **Rooms menu** — the topic channels (Community, Creative, Tech & Content,
-  Business, REKKIES) live in a **"Rooms" dropdown at the top right**, not
-  in the main view. Open it, pick a room, and the chat switches. Every room is
-  **free**. The Main Room is open to all; the rest just need a signed-in profile
-  so posts carry a name (locked rooms show 🔒 until you sign in).
+- **Members-only gate** — a visitor sees ONLY a login card ("Members only").
+  No sign-up button exists anywhere; rooms and chat stay hidden until a
+  club-made account logs in.
+- **Opens in the live Main Room** — after login, a member lands straight in
+  the Main Room. No landing page, no funnel — the page *is* the chat.
+- **Rooms menu** — the topic channels live in a **"Rooms" dropdown at the top
+  right**, not in the main view. Open it, pick a room, and the chat switches.
+  Every room is open to every logged-in member.
 - **Profile section** — a **profile dropdown** in the top right shows your
   avatar initial, display name, email, and join date. Your account is your
-  email + password (Supabase Auth); pick a **display name** when you join and
-  edit it any time. It shows on your messages and follows your account across
-  devices.
+  email + password (Supabase Auth); edit your **display name** any time. It
+  shows on your messages and follows your account across devices.
 - **Permanent chat** — messages are **saved**: open a room and its history
   loads, and everything stays until **you delete it**. Hover your own message
   and hit **×** to remove it for everyone (you can only delete your own).
@@ -40,17 +41,18 @@ capabilities:
 
 - **Auth** — email + password, stored by Supabase (not in this codebase). The
   session is persisted, so returning members stay logged in and land straight
-  in the Main Room. The chosen display name lives on `user_metadata`.
-  - **Email confirmation is ON** by default for this project. A new account
-    must click the emailed link before it can log in — the app detects this and
-    says to check the inbox. To let people in instantly with no email step,
-    turn **off** **Authentication → Providers → Email → Confirm email** in the
-    dashboard.
+  in the Main Room. The display name lives on `user_metadata`.
+  - **Accounts are created manually** by the club: dashboard →
+    **Authentication → Users → Add user** (tick *Auto Confirm User* so the
+    member can log in immediately). The app has no sign-up path.
+  - To fully close the back door, also turn **off**
+    **Authentication → Sign In / Providers → Allow new users to sign up** in
+    the dashboard — otherwise the auth API itself would still accept
+    sign-ups even though the app offers none.
 - **`messages` table** — permanent chat history. Loaded when a room opens; each
   member message is saved and kept until its author deletes it. Row-level
   security: everyone can read, a member can only insert/delete **their own**
-  messages (see `supabase/schema.sql`). Guests can chat live in the Main Room,
-  but guest messages are not saved (RLS only lets signed-in members write).
+  messages (see `supabase/schema.sql`).
 - **Realtime Broadcast** — instant live delivery of new messages and deletes to
   everyone currently viewing a room.
 - **Realtime Presence** — the live "who's here" count.

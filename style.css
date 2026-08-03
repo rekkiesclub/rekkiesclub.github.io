@@ -202,19 +202,34 @@ a { color: inherit; text-decoration: none; }
 .btn-ghost:hover { color: var(--text); border-color: var(--text-dim); }
 .btn-small { padding: 8px 14px; font-size: 0.85rem; border-radius: 8px; }
 
-/* ---- Auth form (inside profile bar) ---- */
-.auth-form { display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
-.auth-form input {
-  font-family: inherit;
+/* ---- Members-only gate (the only thing visitors see) ---- */
+.gate { flex: 1 0 auto; display: flex; align-items: center; justify-content: center; padding: 48px 20px; }
+.gate-card {
+  width: 100%;
+  max-width: 400px;
+  text-align: center;
   background: var(--surface);
   border: 1px solid var(--border);
-  color: var(--text);
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 0.85rem;
-  min-width: 150px;
+  border-radius: 18px;
+  padding: 34px 28px;
 }
-.auth-form input:focus { outline: 2px solid var(--cyan); border-color: var(--cyan); }
+.gate-logo { width: 88px; height: 88px; border-radius: 20px; }
+.gate-title { margin: 14px 0 0; font-size: 1.6rem; font-weight: 700; letter-spacing: 1px; }
+.gate-title em { font-style: normal; color: var(--cyan); }
+.gate-tag { margin: 4px 0 0; color: var(--magenta); font-weight: 600; letter-spacing: 0.5px; }
+.gate-form { display: flex; flex-direction: column; gap: 10px; margin-top: 20px; }
+.gate-form input {
+  font-family: inherit;
+  background: var(--black);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 12px 14px;
+  border-radius: 10px;
+  font-size: 0.95rem;
+}
+.gate-form input:focus { outline: 2px solid var(--cyan); border-color: var(--cyan); }
+.gate-note { margin: 16px 0 0; color: var(--text-dim); font-size: 0.82rem; line-height: 1.5; }
+.members-only-tag { color: var(--text-dim); font-size: 0.85rem; font-weight: 600; letter-spacing: 0.5px; }
 .auth-loading { color: var(--text-dim); }
 
 /* ---- Club (full-width chat; rooms live in the header dropdown) ---- */
@@ -307,7 +322,6 @@ a { color: inherit; text-decoration: none; }
 .chat-message { font-size: 0.92rem; position: relative; padding-right: 22px; }
 .chat-author { color: var(--cyan); font-weight: 600; margin-right: 6px; }
 .chat-author.me { color: var(--magenta); }
-.chat-author.guest { color: var(--text-dim); }
 .chat-time { color: var(--text-dim); font-size: 0.72rem; margin-right: 8px; }
 .chat-text { color: var(--text); word-break: break-word; }
 .msg-del {
@@ -376,7 +390,5 @@ a { color: inherit; text-decoration: none; }
     z-index: 50;
   }
   .channel-item { padding: 11px 12px; font-size: 0.95rem; }
-  /* Logged-out auth form: let it wrap under the brand on small screens */
-  .auth-form { justify-content: flex-end; }
-  .auth-form input { min-width: 120px; }
+  .gate { padding: 28px 14px; }
 }

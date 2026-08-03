@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>REKKIES CLUB</title>
-<meta name="description" content="REKKIES CLUB — the members platform for The Rekkies. Sign in with your email, land in the live Main Room, and chat in real time with the community." />
+<meta name="description" content="REKKIES CLUB — the private members platform for The Rekkies. Members only: log in with the account the club made for you." />
 <link rel="icon" type="image/png" href="assets/rekkies-logo.png" />
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -21,8 +21,9 @@
     </a>
 
     <nav class="header-nav">
-      <!-- Rooms: a clickable menu in the top right -->
-      <div class="menu" id="roomsMenu">
+      <!-- Rooms: a clickable menu in the top right (members only — app.js
+           reveals it once a member is logged in) -->
+      <div class="menu" id="roomsMenu" hidden>
         <button class="btn btn-ghost btn-small menu-trigger" id="roomsTrigger" aria-haspopup="true" aria-expanded="false">
           Rooms <span class="caret">▾</span>
         </button>
@@ -36,7 +37,24 @@
 </header>
 
 <main id="top">
-  <section class="club">
+  <!-- Members-only gate: everything below stays hidden until a member logs in.
+       There is NO sign-up — accounts are created by the club for real-life
+       Rekkies only. -->
+  <section id="gate" class="gate" hidden>
+    <div class="gate-card">
+      <img src="assets/rekkies-logo.png" alt="Rekkies crown" class="gate-logo" />
+      <h1 class="gate-title">REKKIES <em>CLUB</em></h1>
+      <p class="gate-tag">Members only.</p>
+      <form id="gateForm" class="gate-form">
+        <input type="email" id="gateEmail" name="email" placeholder="you@email.com" autocomplete="username" required />
+        <input type="password" id="gatePassword" name="password" placeholder="password" autocomplete="current-password" required minlength="6" />
+        <button type="submit" class="btn btn-primary">Enter the Club</button>
+      </form>
+      <p class="gate-note">This is the private club for real-life Rekkies. Accounts are made for you by the club — there is no sign-up.</p>
+    </div>
+  </section>
+
+  <section id="club" class="club" hidden>
     <div class="chat-pane">
       <div class="chat-header">
         <span id="chatTitle" class="chat-title">Main Room 🏠</span>

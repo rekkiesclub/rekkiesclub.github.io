@@ -2,26 +2,27 @@
    REKKIES CLUB — app.js  (the REKKIES CLUB platform)
    Vanilla JS, no build step, served straight to the browser.
 
-   A live members community: sign in with your email + password, get a
-   profile (a display name that's yours across devices), land in the live
-   Main Room, and chat in real time in any room. Free — nothing to buy.
+   A PRIVATE members community for real-life Rekkies ONLY. There is no
+   sign-up and no guest access: accounts are created manually by the club,
+   and the whole app sits behind a members-only login gate. Log in with the
+   email + password the club gave you, land in the live Main Room, and chat
+   in real time in any room.
 
-   Layout: rooms live in a "Rooms" dropdown menu at the top right; your
-   profile lives in a profile dropdown next to it. The page itself is just
-   the live chat.
+   Layout: logged out, the page is just the gate (login card). Logged in,
+   rooms live in a "Rooms" dropdown menu at the top right; your profile
+   lives in a profile dropdown next to it; the page itself is the live chat.
 
    Runs on Supabase with only the publishable key:
-   • Profiles ... Supabase Auth (email + password). Your display name lives
-                  on your own Auth record (user_metadata), so it follows
-                  your account and needs no table.
+   • Profiles ... Supabase Auth (email + password, club-created). Your
+                  display name lives on your own Auth record
+                  (user_metadata), so it follows your account, no table.
    • Live chat .. Supabase Realtime Broadcast — messages between everyone in
                   a room, instantly.
    • Who's here . Supabase Realtime Presence — a live count of who's in the
                   room right now.
    • Saved chat . the `messages` table (supabase/schema.sql) keeps history
                   permanently: it loads when a room opens and every member
-                  message is stored until its author deletes it. Guests can
-                  chat live in the Main Room but their messages aren't saved.
+                  message is stored until its author deletes it.
 
    Only the PUBLISHABLE key belongs in this file — it's public by design.
    The secret / service-role key must NEVER be added here or committed.
@@ -35,10 +36,9 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_a8_nkU_F0ZmfX-4TjKl96g_qHJPUgmJ
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
 // ---- rooms ----
-// The Main Room is the live home everyone lands in — open to ALL visitors,
-// signed in or not. Every other room is free too; it just asks for a
-// signed-in profile so your messages carry your name.
-const MAIN_CHANNEL = { id: "main", name: "Main Room 🏠", guestOpen: true };
+// The Main Room is the live home every member lands in after logging in.
+// Every room is members-only — the whole app is behind the gate.
+const MAIN_CHANNEL = { id: "main", name: "Main Room 🏠" };
 
 const ROOM_GROUPS = [
   {
@@ -109,34 +109,20 @@ function formatDate(iso) {
     return "";
   }
 }
-// A local-only id for live messages that aren't saved to the DB (guest posts,
-// or any post made while the table is briefly unreachable).
+// A local-only id for a live message that couldn't be saved to the DB (the
+// table briefly unreachable) — it still broadcasts to the room.
 function clientId() {
   return "c-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 7);
 }
 
 // ---- identity ----
-// A stable per-browser guest id so ANY visitor can chat in the free Main Room
-// with no account. Signed-in members use their chosen display name.
-function guestId() {
-  let g = null;
-  try { g = localStorage.getItem("rekkies_guest_id"); } catch (e) {}
-  if (!g) {
-    g = "guest-" + Math.random().toString(36).slice(2, 6);
-    try { localStorage.setItem("rekkies_guest_id", g); } catch (e) {}
-  }
-  return g;
-}
-// The display name shown in chat / presence for the current visitor.
+// The display name shown in chat / presence for the logged-in member.
 function displayName() {
   if (state.session) {
     const meta = state.session.user.user_metadata || {};
     return meta.display_name || String(state.session.user.email || "").split("@")[0] || "member";
   }
-  return guestId();
-}
-function isGuest() {
-  return !state.session;
+  return "member";
 }
 // Can the current user delete this message? Only signed-in members, and only
 // their own saved messages (a numeric DB id + a matching user_id).
@@ -170,42 +156,28 @@ async function refreshSession() {
   state.session = data.session;
   state.loading = false;
 
-  // If they're sitting in a room that now needs a sign-in they no longer have
-  // (they just signed out), drop them so the Main Room fallback kicks in.
-  const active = channelById(state.activeChannelId);
-  if (active && !isChannelUnlocked(active)) {
-    await teardownRealtime();
+  // No session → back behind the gate: tear down any live room completely.
+  if (!state.session && state.activeChannelId) {
+    teardownRealtime();
     state.activeChannelId = null;
     state.messages = [];
   }
 
   render();
 
-  // EVERYONE — member or guest — opens straight into the live Main Room.
-  // Only when nothing is active, so a later token refresh doesn't yank someone
-  // out of a room they deliberately opened.
-  if (!state.activeChannelId) {
+  // A logged-in member opens straight into the live Main Room. Only when
+  // nothing is active, so a later token refresh doesn't yank someone out of
+  // a room they deliberately opened.
+  if (state.session && !state.activeChannelId) {
     await selectChannel("main");
-  } else {
+  } else if (state.session && state.rt && state.rtReady) {
     // Re-track presence under the (possibly new) name after an auth change.
-    if (state.rt && state.rtReady) state.rt.track({ name: displayName() });
+    state.rt.track({ name: displayName() });
   }
 }
 
-async function signUp(email, password, name) {
-  rememberEmail(email);
-  const opts = name ? { data: { display_name: name } } : undefined;
-  const { data, error } = await sb.auth.signUp({ email, password, options: opts });
-  if (error) {
-    alert("Couldn't sign up: " + error.message);
-    return;
-  }
-  // Email confirmation ON (default) → no session; user must click the link.
-  // Confirmation OFF → a session comes back and onAuthStateChange logs them in.
-  if (!data.session) {
-    alert("Account created! Check your email for a confirmation link, then log in.");
-  }
-}
+// There is deliberately NO signUp() — accounts for real-life Rekkies are
+// created manually by the club (Supabase dashboard → Authentication → Users).
 
 async function signIn(email, password) {
   rememberEmail(email);
@@ -233,11 +205,10 @@ async function editName() {
   if (state.rt && state.rtReady) state.rt.track({ name: trimmed });
 }
 
-// Every room is FREE and open to EVERYONE, guests included — nothing is gated.
-// (Signed-in members' messages persist to the DB; guests chat live like they
-// already do in the Main Room. The rank-named groups are just topic labels.)
+// MEMBERS ONLY: every room needs a logged-in session — the app has no guest
+// access at all. (The rank-named groups are just topic labels.)
 function isChannelUnlocked(channel) {
-  return !!channel;
+  return !!channel && !!state.session;
 }
 
 // ---- realtime chat + presence ----
@@ -279,7 +250,7 @@ async function selectChannel(channelId) {
       .order("created_at", { ascending: true })
       .limit(200);
     if (!error && data && state.activeChannelId === channelId) {
-      state.messages = data.map((m) => ({ ...m, is_guest: false }));
+      state.messages = data;
     }
   } catch (e) {
     /* no table — live-only room */
@@ -287,7 +258,7 @@ async function selectChannel(channelId) {
   renderMessages();
 
   // Live messages (Broadcast) + who's-online (Presence) on one channel.
-  const myKey = state.session ? state.session.user.id : guestId();
+  const myKey = state.session.user.id;
   const rt = sb.channel(`room:${channelId}`, {
     config: { broadcast: { self: false }, presence: { key: myKey } },
   });
@@ -336,35 +307,29 @@ async function sendMessage(content) {
   let msg = {
     id: null,
     channel_id: channel.id,
-    user_id: state.session ? state.session.user.id : null,
+    user_id: state.session.user.id,
     author_name: displayName(),
-    is_guest: isGuest(),
     content: text,
     created_at: new Date().toISOString(),
   };
 
-  // Members: SAVE to the DB first so history persists and every client shares
-  // the same message id (needed so deletes match everywhere). If the table
-  // isn't there, fall back to a live-only client id.
-  if (state.session) {
-    try {
-      const { data, error } = await sb
-        .from("messages")
-        .insert({
-          channel_id: channel.id,
-          user_id: state.session.user.id,
-          author_name: msg.author_name,
-          content: text,
-        })
-        .select("id, channel_id, user_id, author_name, content, created_at")
-        .single();
-      if (!error && data) msg = { ...data, is_guest: false };
-      else msg.id = clientId();
-    } catch (e) {
-      msg.id = clientId();
-    }
-  } else {
-    // Guests chat live but aren't saved (RLS only lets members write).
+  // SAVE to the DB first so history persists and every client shares the same
+  // message id (needed so deletes match everywhere). If the table is briefly
+  // unreachable, fall back to a live-only client id.
+  try {
+    const { data, error } = await sb
+      .from("messages")
+      .insert({
+        channel_id: channel.id,
+        user_id: state.session.user.id,
+        author_name: msg.author_name,
+        content: text,
+      })
+      .select("id, channel_id, user_id, author_name, content, created_at")
+      .single();
+    if (!error && data) msg = data;
+    else msg.id = clientId();
+  } catch (e) {
     msg.id = clientId();
   }
 
@@ -460,26 +425,22 @@ function renderProfile() {
     document.getElementById("editNameBtn").addEventListener("click", () => { closeMenus(); editName(); });
     document.getElementById("signOutBtn").addEventListener("click", () => { closeMenus(); signOut(); });
   } else {
-    bar.innerHTML = `
-      <form id="authForm" class="auth-form">
-        <input type="email" id="authEmail" name="email" placeholder="you@email.com" autocomplete="username" required value="${escapeHtml(rememberedEmail())}" />
-        <input type="password" id="authPassword" name="password" placeholder="password" autocomplete="current-password" required minlength="6" />
-        <button type="submit" class="btn btn-primary btn-small">Log in</button>
-        <button type="button" id="signUpBtn" class="btn btn-outline btn-small">Join</button>
-      </form>`;
-    const form = document.getElementById("authForm");
-    const emailInput = document.getElementById("authEmail");
-    const passwordInput = document.getElementById("authPassword");
-    form.addEventListener("submit", (e) => {
-      e.preventDefault();
-      signIn(emailInput.value.trim(), passwordInput.value);
-    });
-    document.getElementById("signUpBtn").addEventListener("click", () => {
-      if (!form.reportValidity()) return;
-      const name = (prompt("Pick a display name for the club (shown in chat):") || "").trim().slice(0, 32);
-      signUp(emailInput.value.trim(), passwordInput.value, name);
-    });
+    // Logged out, the gate (in the page body) owns the login form — the
+    // header just states what this place is.
+    bar.innerHTML = `<span class="members-only-tag">Members only</span>`;
   }
+}
+
+// Show the gate to visitors and the club to members; the Rooms menu only
+// exists for members.
+function renderGate() {
+  const gate = document.getElementById("gate");
+  const club = document.getElementById("club");
+  const roomsMenu = document.getElementById("roomsMenu");
+  const isMember = !!state.session;
+  if (gate) gate.hidden = state.loading || isMember;
+  if (club) club.hidden = state.loading || !isMember;
+  if (roomsMenu) roomsMenu.hidden = !isMember;
 }
 
 function renderRoomsMenu() {
@@ -543,13 +504,13 @@ function renderMessages() {
   const unlocked = isChannelUnlocked(channel);
   input.disabled = !unlocked;
   sendBtn.disabled = !unlocked;
-  input.placeholder = unlocked ? "Message the room…" : "Sign in to chat in this room";
+  input.placeholder = "Message the room…";
 
   const me = displayName();
   box.innerHTML = state.messages.length
     ? state.messages
         .map((m) => {
-          const cls = m.is_guest ? "guest" : m.author_name === me ? "me" : "";
+          const cls = m.author_name === me ? "me" : "";
           const del = canDelete(m)
             ? `<button class="msg-del" data-id="${escapeHtml(String(m.id))}" title="Delete message" aria-label="Delete message">×</button>`
             : "";
@@ -571,6 +532,7 @@ function renderMessages() {
 }
 
 function render() {
+  renderGate();
   renderProfile();
   renderRoomsMenu();
   renderChatHeader();
@@ -582,6 +544,15 @@ document.addEventListener("DOMContentLoaded", () => {
   render();
   refreshSession();
   sb.auth.onAuthStateChange(() => refreshSession());
+
+  // The members-only gate: login only, no sign-up path anywhere.
+  const gateForm = document.getElementById("gateForm");
+  const gateEmail = document.getElementById("gateEmail");
+  gateEmail.value = rememberedEmail();
+  gateForm.addEventListener("submit", (e) => {
+    e.preventDefault();
+    signIn(gateEmail.value.trim(), document.getElementById("gatePassword").value);
+  });
 
   // Rooms dropdown trigger (the panel content is (re)rendered by renderRoomsMenu).
   const roomsTrigger = document.getElementById("roomsTrigger");
