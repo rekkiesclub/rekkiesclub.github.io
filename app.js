@@ -48,7 +48,7 @@ const ROOM_GROUPS = [
   },
   {
     key: "creative",
-    label: "SOLDIERS",
+    label: "CREATIVE",
     rooms: [
       { id: "musical-instruments", name: "Musical Instruments 🎹" },
       { id: "music-mixing", name: "Music Mixing 🎧" },
@@ -60,7 +60,7 @@ const ROOM_GROUPS = [
   },
   {
     key: "tech",
-    label: "CAPTAINS",
+    label: "SYSTEM DESIGN",
     rooms: [
       { id: "artificial-intelligence", name: "Artificial Intelligence 🤖" },
       { id: "creative-content", name: "Creative Content 🖋️" },
@@ -69,7 +69,7 @@ const ROOM_GROUPS = [
   },
   {
     key: "business",
-    label: "COLONELS",
+    label: "BUSINESS",
     rooms: [
       { id: "product", name: "Product 🏅" },
       { id: "sales", name: "Sales 🔥" },
@@ -78,7 +78,7 @@ const ROOM_GROUPS = [
   },
   {
     key: "inner",
-    label: "GENERALS & ELITES",
+    label: "REKKIES",
     rooms: [{ id: "inner-circle", name: "👑 REKKIES 👑" }],
   },
 ];
