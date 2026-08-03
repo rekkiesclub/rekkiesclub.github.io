@@ -575,7 +575,7 @@ function renderMedia(m) {
   if (!m.media_url) return "";
   const url = escapeHtml(m.media_url);
   if (m.media_type === "video") {
-    return `<video class="chat-media" src="${url}" controls playsinline preload="metadata" draggable="false"></video>`;
+    return `<video class="chat-media" src="${url}" controls controlslist="nofullscreen noremoteplayback" disablepictureinpicture playsinline webkit-playsinline preload="metadata" draggable="false"></video>`;
   }
   return `<img class="chat-media" src="${url}" alt="" loading="lazy" draggable="false" />`;
 }
