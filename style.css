@@ -372,6 +372,38 @@ a { color: inherit; text-decoration: none; }
 .chat-form input:focus { outline: 2px solid var(--cyan); border-color: var(--cyan); }
 .chat-form input:disabled { opacity: 0.45; }
 
+/* "+" add-media button inside the message bar */
+.media-btn {
+  flex: 0 0 auto;
+  width: 44px;
+  font-family: inherit;
+  font-size: 1.4rem;
+  line-height: 1;
+  font-weight: 700;
+  color: var(--cyan);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.media-btn:hover:not(:disabled) { border-color: var(--cyan); background: rgba(0, 247, 255, 0.12); }
+.media-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+
+/* Photos + videos rendered inside a chat message */
+.chat-media {
+  display: block;
+  margin-top: 6px;
+  max-width: min(320px, 100%);
+  max-height: 320px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+}
+.chat-media-link { display: inline-block; }
+video.chat-media { background: #000; width: min(320px, 100%); }
+
 @media (max-width: 720px) {
   .header-inner { padding: 10px 14px; }
   .chat-pane { min-height: 0; }

@@ -9,7 +9,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com" />
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet" />
-<link rel="stylesheet" href="style.css?v=20260803d" />
+<link rel="stylesheet" href="style.css?v=20260803e" />
 </head>
 <body>
 
@@ -61,6 +61,8 @@
       </div>
       <div id="chatMessages" class="chat-messages"></div>
       <form id="chatForm" class="chat-form">
+        <input id="mediaInput" type="file" accept="image/*,video/*" hidden />
+        <button type="button" id="mediaBtn" class="media-btn" title="Add photo or video" aria-label="Add photo or video" disabled>+</button>
         <input id="chatInput" type="text" placeholder="Message the channel…" autocomplete="off" maxlength="2000" disabled />
         <button type="submit" class="btn btn-primary btn-small" disabled>Send</button>
       </form>
@@ -69,6 +71,6 @@
 </main>
 
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-<script src="app.js?v=20260803d"></script>
+<script src="app.js?v=20260803e"></script>
 </body>
 </html>

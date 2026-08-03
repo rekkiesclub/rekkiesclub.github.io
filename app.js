@@ -35,6 +35,13 @@ const SUPABASE_PUBLISHABLE_KEY = "sb_publishable_a8_nkU_F0ZmfX-4TjKl96g_qHJPUgmJ
 // throws a page-breaking SyntaxError that blanks the whole app. Keep it `sb`.
 const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY);
 
+// Photos + videos are uploaded to a public Supabase Storage bucket; the
+// message row just stores the public URL + whether it's an image or a video.
+const MEDIA_BUCKET = "chat-media";
+const MAX_MEDIA_BYTES = 50 * 1024 * 1024; // 50 MB — matches the bucket limit.
+// Columns fetched for every message (now including the media fields).
+const MSG_COLS = "id, channel_id, user_id, author_name, content, media_url, media_type, created_at";
+
 // ---- rooms ----
 // The Main Room is the live home every member lands in after logging in.
 // Every room is members-only — the whole app is behind the gate.
@@ -149,6 +156,7 @@ let state = {
   rt: null,          // active realtime channel
   rtReady: false,
   onlineCount: 0,
+  uploading: false,  // a photo/video is currently uploading
 };
 
 async function refreshSession() {
@@ -245,7 +253,7 @@ async function selectChannel(channelId) {
   try {
     const { data, error } = await sb
       .from("messages")
-      .select("id, channel_id, user_id, author_name, content, created_at")
+      .select(MSG_COLS)
       .eq("channel_id", channelId)
       .order("created_at", { ascending: true })
       .limit(200);
@@ -299,17 +307,20 @@ async function selectChannel(channelId) {
   state.rt = rt;
 }
 
-async function sendMessage(content) {
-  const text = content.trim();
+// Persist one message (text and/or media), echo it locally, and broadcast it
+// live to the room. Shared by both text sends and media uploads.
+async function persistAndBroadcast({ content = "", media_url = null, media_type = null }) {
   const channel = channelById(state.activeChannelId);
-  if (!channel || !isChannelUnlocked(channel) || !text) return;
+  if (!channel || !isChannelUnlocked(channel)) return;
 
   let msg = {
     id: null,
     channel_id: channel.id,
     user_id: state.session.user.id,
     author_name: displayName(),
-    content: text,
+    content,
+    media_url,
+    media_type,
     created_at: new Date().toISOString(),
   };
 
@@ -323,9 +334,11 @@ async function sendMessage(content) {
         channel_id: channel.id,
         user_id: state.session.user.id,
         author_name: msg.author_name,
-        content: text,
+        content,
+        media_url,
+        media_type,
       })
-      .select("id, channel_id, user_id, author_name, content, created_at")
+      .select(MSG_COLS)
       .single();
     if (!error && data) msg = data;
     else msg.id = clientId();
@@ -343,6 +356,47 @@ async function sendMessage(content) {
   }
 }
 
+async function sendMessage(content) {
+  const text = content.trim();
+  const channel = channelById(state.activeChannelId);
+  if (!channel || !isChannelUnlocked(channel) || !text) return;
+  await persistAndBroadcast({ content: text });
+}
+
+// Upload a chosen photo/video to Storage, then post it as a message.
+async function sendMediaFile(file) {
+  const channel = channelById(state.activeChannelId);
+  if (!file || !channel || !isChannelUnlocked(channel) || !state.session) return;
+  const isImage = file.type.startsWith("image/");
+  const isVideo = file.type.startsWith("video/");
+  if (!isImage && !isVideo) { alert("Please choose a photo or a video."); return; }
+  if (file.size > MAX_MEDIA_BYTES) { alert("That file is too big — 50 MB max."); return; }
+
+  setMediaUploading(true);
+  try {
+    const safe = (file.name || "upload").replace(/[^a-zA-Z0-9._-]/g, "_").slice(-60) || "upload";
+    const path = `${channel.id}/${state.session.user.id}/${Date.now()}-${safe}`;
+    const { error: upErr } = await sb.storage
+      .from(MEDIA_BUCKET)
+      .upload(path, file, { contentType: file.type || undefined, upsert: false });
+    if (upErr) { alert("Upload failed: " + upErr.message); return; }
+    const { data: pub } = sb.storage.from(MEDIA_BUCKET).getPublicUrl(path);
+    await persistAndBroadcast({ media_url: pub.publicUrl, media_type: isImage ? "image" : "video" });
+  } catch (e) {
+    alert("Upload failed. Please try again.");
+  } finally {
+    setMediaUploading(false);
+  }
+}
+
+// Toggle the + button between its normal state and an in-progress "…".
+function setMediaUploading(on) {
+  state.uploading = on;
+  const btn = document.getElementById("mediaBtn");
+  if (btn) { btn.textContent = on ? "…" : "+"; btn.disabled = on; }
+  if (!on) renderMessages(); // restore the correct enabled/disabled state
+}
+
 async function deleteMessage(id) {
   const idx = state.messages.findIndex((m) => String(m.id) === String(id));
   if (idx === -1) return;
@@ -357,6 +411,14 @@ async function deleteMessage(id) {
   // Remove the saved row (numeric ids are persisted DB rows).
   if (/^\d+$/.test(String(m.id))) {
     try { await sb.from("messages").delete().eq("id", m.id); } catch (e) {}
+  }
+  // If it carried a photo/video, delete that file from Storage too.
+  if (m.media_url) {
+    try {
+      const marker = "/object/public/" + MEDIA_BUCKET + "/";
+      const i = m.media_url.indexOf(marker);
+      if (i >= 0) await sb.storage.from(MEDIA_BUCKET).remove([decodeURIComponent(m.media_url.slice(i + marker.length))]);
+    } catch (e) {}
   }
   // Tell everyone else viewing the room to drop it too.
   if (state.rt && state.rtReady) {
@@ -488,22 +550,35 @@ function renderPresence() {
   el.classList.remove("empty");
 }
 
+// Photo/video markup for a message that carries media.
+function renderMedia(m) {
+  if (!m.media_url) return "";
+  const url = escapeHtml(m.media_url);
+  if (m.media_type === "video") {
+    return `<video class="chat-media" src="${url}" controls playsinline preload="metadata"></video>`;
+  }
+  return `<a class="chat-media-link" href="${url}" target="_blank" rel="noopener"><img class="chat-media" src="${url}" alt="shared photo" loading="lazy" /></a>`;
+}
+
 function renderMessages() {
   const box = document.getElementById("chatMessages");
   const channel = channelById(state.activeChannelId);
   const input = document.getElementById("chatInput");
-  const sendBtn = document.querySelector("#chatForm button");
+  const sendBtn = document.querySelector("#chatForm button[type=submit]");
+  const mediaBtn = document.getElementById("mediaBtn");
 
   if (!channel) {
     box.innerHTML = `<p class="chat-placeholder">No room selected yet.</p>`;
     input.disabled = true;
-    sendBtn.disabled = true;
+    if (sendBtn) sendBtn.disabled = true;
+    if (mediaBtn) mediaBtn.disabled = true;
     return;
   }
 
   const unlocked = isChannelUnlocked(channel);
   input.disabled = !unlocked;
-  sendBtn.disabled = !unlocked;
+  if (sendBtn) sendBtn.disabled = !unlocked;
+  if (mediaBtn) mediaBtn.disabled = !unlocked || state.uploading;
   input.placeholder = "Message the room…";
 
   const me = displayName();
@@ -514,11 +589,13 @@ function renderMessages() {
           const del = canDelete(m)
             ? `<button class="msg-del" data-id="${escapeHtml(String(m.id))}" title="Delete message" aria-label="Delete message">×</button>`
             : "";
+          const text = m.content ? `<span class="chat-text">${escapeHtml(m.content)}</span>` : "";
           return `
         <div class="chat-message">
           <span class="chat-author ${cls}">${escapeHtml(m.author_name || "member")}</span>
           <span class="chat-time">${escapeHtml(formatTime(m.created_at))}</span>
-          <span class="chat-text">${escapeHtml(m.content)}</span>
+          ${text}
+          ${renderMedia(m)}
           ${del}
         </div>`;
         })
@@ -579,4 +656,16 @@ document.addEventListener("DOMContentLoaded", () => {
     sendMessage(input.value);
     input.value = "";
   });
+
+  // The "+" button opens the file picker; picking a photo/video uploads + posts it.
+  const mediaBtn = document.getElementById("mediaBtn");
+  const mediaInput = document.getElementById("mediaInput");
+  if (mediaBtn && mediaInput) {
+    mediaBtn.addEventListener("click", () => { if (!mediaBtn.disabled) mediaInput.click(); });
+    mediaInput.addEventListener("change", () => {
+      const file = mediaInput.files && mediaInput.files[0];
+      mediaInput.value = ""; // allow re-picking the same file later
+      if (file) sendMediaFile(file);
+    });
+  }
 });
