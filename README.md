@@ -29,6 +29,10 @@ palette only — `#000000` `#ffffff` `#00f7ff` `#fa00ff` `#00ff49`.
 - **Permanent chat** — messages are **saved**: open a room and its history
   loads, and everything stays until **you delete it**. Hover your own message
   and hit **×** to remove it for everyone (you can only delete your own).
+- **Photos + videos** — the **+** button in the message bar opens your file
+  picker; the chosen photo or video (up to 50 MB) uploads to Supabase Storage
+  and posts inline in the room. Deleting the message also deletes the stored
+  file. Media is saved just like text, so it stays in history.
 - **Live presence** — each room shows a real-time **"N here"** count of who's
   currently in it, powered by Supabase Realtime Presence.
 

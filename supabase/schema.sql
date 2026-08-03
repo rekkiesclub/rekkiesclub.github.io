@@ -19,9 +19,22 @@ create table if not exists public.messages (
   channel_id text not null,
   user_id uuid not null references auth.users(id) on delete cascade,
   author_name text not null,
-  content text not null check (char_length(content) between 1 and 2000),
+  content text not null default '',
+  -- a photo/video shared in the message: the public Storage URL + whether it's
+  -- an 'image' or a 'video' (both null for a plain text message)
+  media_url text,
+  media_type text,
   created_at timestamptz not null default now()
 );
+
+-- A message must carry SOMETHING: non-empty text, or a media attachment (so a
+-- photo/video can be posted with no caption). Text is still capped at 2000.
+alter table public.messages add column if not exists media_url text;
+alter table public.messages add column if not exists media_type text;
+alter table public.messages drop constraint if exists messages_content_check;
+alter table public.messages add constraint messages_content_check
+  check (char_length(coalesce(content, '')) <= 2000
+         and (btrim(coalesce(content, '')) <> '' or media_url is not null));
 
 create index if not exists messages_channel_created_idx
   on public.messages (channel_id, created_at);
@@ -60,3 +73,21 @@ begin
     alter publication supabase_realtime add table public.messages;
   end if;
 end $$;
+
+-- ---- Storage: the `chat-media` bucket for shared photos/videos ----
+-- The bucket itself is created in the dashboard (Storage → New bucket:
+-- id `chat-media`, Public ON, 50 MB file-size limit) or via the Storage API —
+-- it can't be created from SQL. These RLS policies on storage.objects govern
+-- it: anyone can read (it's public), any signed-in member can upload, and a
+-- member can delete only files they own.
+drop policy if exists "chat_media_read" on storage.objects;
+create policy "chat_media_read" on storage.objects
+  for select using (bucket_id = 'chat-media');
+
+drop policy if exists "chat_media_upload" on storage.objects;
+create policy "chat_media_upload" on storage.objects
+  for insert to authenticated with check (bucket_id = 'chat-media');
+
+drop policy if exists "chat_media_delete" on storage.objects;
+create policy "chat_media_delete" on storage.objects
+  for delete to authenticated using (bucket_id = 'chat-media' and owner = auth.uid());
