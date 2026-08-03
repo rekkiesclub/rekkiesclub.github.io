@@ -390,19 +390,15 @@ a { color: inherit; text-decoration: none; }
     overscroll-behavior: contain;
     z-index: 60;
   }
-  body.menu-open::after {
-    content: "";
-    position: fixed;
-    inset: 0;
-    background: rgba(0, 0, 0, 0.6);
-    z-index: 50;
-  }
-  /* The profile panel lives inside .site-header, which is a sticky z-index:10
-     stacking context — so the panel's own z-index can't beat the backdrop
-     (z-index:50), which sits in the page's root context. Without this, the dim
-     layer covered the header and swallowed taps on Edit name / Sign out. Lift
-     the whole header above the backdrop while a menu is open. */
-  body.menu-open .site-header { z-index: 70; }
+  /* NO dim backdrop on phones. A full-screen dim overlay (a body::after
+     pseudo-element) sat in the page's root stacking context, while the menu
+     panels are trapped inside the sticky header's own stacking context — on
+     real iOS Safari the overlay ended up ON TOP of the panel and swallowed
+     taps on Edit name / Sign out, even though desktop/headless rendered it
+     fine. Dropping the dim removes the overlay entirely, so the solid panel
+     (z-index below) simply floats above the page and every tap lands. This
+     also matches the Rooms menu, which is already dim-free by request. */
+  .site-header { z-index: 70; }
   .channel-item { padding: 11px 12px; font-size: 0.95rem; }
   .gate { padding: 28px 14px; }
 }
