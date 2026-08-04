@@ -30,6 +30,10 @@
 
 html, body { height: 100%; }
 
+/* The app fills the screen exactly and the PAGE never scrolls — no browser
+   scrollbar at the side. The only scrollable region is .chat-messages, so the
+   room name (chat header) and the message bar stay on screen on every device.
+   100dvh tracks the real visible height on phones (address bar show/hide). */
 body {
   margin: 0;
   font-family: "Fredoka", sans-serif;
@@ -38,7 +42,18 @@ body {
   line-height: 1.5;
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  height: 100vh;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* main hands the leftover height (viewport minus header) down to .gate/.club;
+   min-height: 0 lets the chat shrink instead of pushing the page taller. */
+main {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
 }
 
 a { color: inherit; text-decoration: none; }
@@ -211,8 +226,11 @@ a { color: inherit; text-decoration: none; }
 .btn-small { padding: 8px 14px; font-size: 0.85rem; border-radius: 8px; }
 
 /* ---- Members-only gate (the only thing visitors see) ---- */
-.gate { flex: 1 0 auto; display: flex; align-items: center; justify-content: center; padding: 48px 20px; }
+/* Centered via margin:auto on the card (not align-items:center) so that on a
+   very short screen the top of the card stays reachable when .gate scrolls. */
+.gate { flex: 1 1 auto; min-height: 0; overflow-y: auto; display: flex; padding: 48px 20px; }
 .gate-card {
+  margin: auto;
   width: 100%;
   max-width: 400px;
   text-align: center;
@@ -241,7 +259,7 @@ a { color: inherit; text-decoration: none; }
 .auth-loading { color: var(--text-dim); }
 
 /* ---- Club (full-width chat; rooms live in the header dropdown) ---- */
-.club { flex: 1 0 auto; max-width: 900px; width: 100%; margin: 0 auto; padding: 20px; display: flex; }
+.club { flex: 1 1 auto; min-height: 0; max-width: 900px; width: 100%; margin: 0 auto; padding: 20px; display: flex; }
 
 /* Room groups — used inside the Rooms dropdown panel */
 .channel-group { margin-bottom: 14px; }
@@ -286,7 +304,7 @@ a { color: inherit; text-decoration: none; }
   display: flex;
   flex-direction: column;
   min-width: 0;
-  min-height: 560px;
+  min-height: 0;
   border: 1px solid var(--border);
   border-radius: 16px;
   overflow: hidden;
@@ -318,15 +336,22 @@ a { color: inherit; text-decoration: none; }
 }
 .presence.empty::before { background: var(--text-dim); box-shadow: none; }
 
+/* The ONLY scrolling region in the app. min-height: 0 (not a max-height cap)
+   is what makes it scroll inside the fixed-height pane, so the room name above
+   and the message bar below never leave the screen. The scrollbar itself is
+   hidden on every browser — scrolling still works by wheel, drag and touch. */
 .chat-messages {
-  flex-grow: 1;
+  flex: 1 1 auto;
+  min-height: 0;
   padding: 16px 18px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  max-height: 440px;
+  scrollbar-width: none;      /* Firefox */
+  -ms-overflow-style: none;   /* old Edge/IE */
 }
+.chat-messages::-webkit-scrollbar { display: none; } /* Chrome/Safari */
 .chat-placeholder { color: var(--text-dim); font-size: 0.9rem; margin: auto; }
 .chat-message { font-size: 0.92rem; position: relative; padding-right: 22px; }
 .chat-author { color: var(--cyan); font-weight: 600; margin-right: 6px; }
@@ -444,8 +469,7 @@ img.chat-media { cursor: zoom-in; }
 
 @media (max-width: 720px) {
   .header-inner { padding: 10px 14px; }
-  .chat-pane { min-height: 0; }
-  .chat-messages { max-height: 62vh; }
+  .club { padding: 12px; }
   /* Dropdowns become a CENTERED modal on phones — fixed to the middle of the
      screen no matter where the trigger sits, with a dimmed backdrop behind. */
   .menu-panel {
